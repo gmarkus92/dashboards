@@ -1,1578 +1,960 @@
 <!DOCTYPE html>
-
 <html lang="en">
-
 <head>
-
   <meta charset="UTF-8" />
-
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <title>Roadmap Generator</title>
-
+  <title>Roadmap Generator - Observability</title>
   <style>
-
     :root {
-
       --panel: #ffffff;
-
       --border: #d7dde4;
-
       --text: #17212b;
-
       --muted: #5f6c7b;
-
       --accent: #1f7a8c;
-
+      --analysis: #2f7ed8;
+      --event: #f59e0b;
+      --build: #10b981;
       --weekend: #e9edf2;
-
       --cell-w: 42px;
-
       --row-h: 44px;
-
-      --name-w: 260px;
-
+      --name-w: 320px;
     }
-
-
 
     * { box-sizing: border-box; }
 
-
-
     body {
-
       margin: 0;
-
       font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-
       font-size: 12px;
-
       background: linear-gradient(180deg, #eef3f8 0%, #f7f9fb 100%);
-
       color: var(--text);
-
     }
-
-
 
     .container {
-
-      max-width: 1400px;
-
+      max-width: 1500px;
       margin: 24px auto;
-
       padding: 0 16px 24px;
-
     }
-
-
 
     h1 { margin: 0 0 16px; font-size: 12px; }
 
-
-
     .panel {
-
       background: var(--panel);
-
       border: 1px solid var(--border);
-
       border-radius: 12px;
-
       padding: 14px;
-
       box-shadow: 0 4px 14px rgba(23, 33, 43, 0.04);
-
       margin-bottom: 16px;
-
     }
-
-
 
     .panel h2 { margin: 0 0 10px; font-size: 12px; }
 
-
-
     .row {
-
       display: flex;
-
       gap: 8px;
-
       align-items: center;
-
       margin-bottom: 8px;
-
       flex-wrap: wrap;
-
     }
-
-
 
     input {
-
       font: inherit;
-
       border-radius: 8px;
-
       border: 1px solid var(--border);
-
       padding: 8px 10px;
-
-      width: 160px;
-
+      width: 150px;
     }
-
-
 
     ul {
-
       list-style: none;
-
       margin: 8px 0 0;
-
       padding: 0;
-
       display: flex;
-
       flex-direction: column;
-
       gap: 6px;
-
-      max-height: 280px;
-
+      max-height: 320px;
       overflow: auto;
-
     }
-
-
 
     li {
-
       border: 1px solid var(--border);
-
       border-radius: 8px;
-
       padding: 7px 10px;
-
       display: flex;
-
       justify-content: space-between;
-
       align-items: center;
-
-      background: #fcfdfe;
-
       gap: 10px;
-
+      background: #fcfdfe;
     }
-
-
 
     .small { color: var(--muted); font-size: 12px; }
 
+    .metrics-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
 
+    .metrics-input {
+      width: 90px;
+      padding: 4px 6px;
+    }
 
     .timeline-wrap {
-
       border: 1px solid var(--border);
-
       border-radius: 12px;
-
       background: #fff;
-
       overflow: auto;
-
     }
-
-
 
     .timeline { position: relative; width: max-content; min-width: 100%; }
-
     .header-row, .roadmap-row { display: grid; grid-template-columns: var(--name-w) auto; }
 
-
-
     .header-row {
-
       position: sticky;
-
       top: 0;
-
       z-index: 5;
-
       background: #fff;
-
       border-bottom: 1px solid var(--border);
-
     }
-
-
 
     .name-cell {
-
       height: var(--row-h);
-
       display: flex;
-
       align-items: center;
-
       padding: 0 10px;
-
       border-right: 1px solid var(--border);
-
       font-weight: 600;
-
       background: #f8fafc;
-
       position: sticky;
-
       left: 0;
-
       z-index: 5;
-
     }
 
-
-
     .roadmap-row .name-cell { font-weight: 500; background: #fff; z-index: 5; }
-
-
-
     .header-row .name-cell { z-index: 6; }
-
-
 
     .days { position: relative; height: var(--row-h); }
 
-
-
     .day-cell {
-
       position: absolute;
-
       top: 0;
-
       height: 100%;
-
       width: var(--cell-w);
-
       border-right: 1px solid var(--border);
-
       border-bottom: 1px solid var(--border);
-
       padding: 4px;
-
       font-size: 12px;
-
       color: var(--muted);
-
       background: #fff;
-
       overflow: hidden;
-
       white-space: nowrap;
-
     }
-
-
 
     .day-cell.weekend { background: var(--weekend); }
 
-
-
     .lane { position: relative; height: var(--row-h); }
 
-
-
     .bar {
-
       position: absolute;
-
       top: 7px;
-
       height: calc(var(--row-h) - 14px);
-
       border-radius: 8px;
-
-      background: linear-gradient(90deg, var(--accent) 0%, #2c95ab 100%);
-
       color: #fff;
-
       display: flex;
-
       align-items: center;
-
       padding: 0 8px;
-
       font-size: 12px;
-
       overflow: hidden;
-
       white-space: nowrap;
-
       text-overflow: ellipsis;
-
       box-shadow: 0 2px 6px rgba(31, 122, 140, 0.25);
-
       z-index: 1;
-
     }
 
+    .bar.phase-analysis { background: linear-gradient(90deg, var(--analysis) 0%, #4d8fe0 100%); }
+    .bar.phase-event { background: linear-gradient(90deg, var(--event) 0%, #f7b84f 100%); }
+    .bar.phase-build { background: linear-gradient(90deg, var(--build) 0%, #34d399 100%); }
 
+    .phase-legend {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin: 0 0 8px;
+      color: var(--muted);
+      flex-wrap: wrap;
+    }
+
+    .phase-legend-item {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      white-space: nowrap;
+    }
+
+    .phase-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      display: inline-block;
+    }
 
     .milestone-line {
-
       position: absolute;
-
       top: 0;
-
       bottom: 0;
-
       width: 2px;
-
       background: #d62828;
-
       z-index: 4;
-
       pointer-events: none;
-
     }
-
-
 
     .milestone-label {
-
       position: absolute;
-
       top: 2px;
-
       left: 4px;
-
       color: #d62828;
-
       font-size: 12px;
-
       font-weight: 600;
-
       background: rgba(255, 255, 255, 0.92);
-
       padding: 0 4px;
-
       border-radius: 4px;
-
       white-space: nowrap;
-
     }
-
-
 
     .meta { margin-top: 10px; font-size: 12px; color: var(--muted); }
-
     .chart-title { margin: 14px 0 8px; font-size: 12px; font-weight: 600; }
 
-
-
     .chart-wrap {
-
       border: 1px solid var(--border);
-
       border-radius: 12px;
-
       background: #fff;
-
       padding: 8px;
-
       overflow: auto;
-
     }
-
-
 
     #burndownCanvas {
-
       display: block;
-
       height: 220px;
-
     }
-
   </style>
-
 </head>
-
 <body>
-
   <div class="container">
-
-    <h1>Automatic Roadmap Generator</h1>
-
-
+    <h1>Automatic Roadmap Generator (Observability)</h1>
 
     <section class="panel">
-
       <h2>Capacity</h2>
-
       <div class="row">
-
-        <label for="developerCount">Available developers:</label>
-
+        <label for="analystCount">Analysts:</label>
+        <input id="analystCount" type="number" min="1" step="1" value="3" />
+        <label for="eventCreatorCount">Event creator devs:</label>
+        <input id="eventCreatorCount" type="number" min="1" step="1" value="20" />
+        <label for="developerCount">Build developers:</label>
         <input id="developerCount" type="number" min="1" step="1" value="4" />
-
         <label for="startDate">Start date:</label>
-
         <input id="startDate" type="date" />
-
       </div>
-
-      <div class="small">Roadmap items and manday estimates are fixed.</div>
-
+      <div class="small">Rates: Analysis = 12 metrics/analyst/day, Event creation = 12 metrics/event-creator/day.</div>
     </section>
 
-
-
     <section class="panel">
-
       <h2>Fixed Roadmap Items</h2>
-
       <ul id="itemList"></ul>
-
     </section>
-
-
 
     <section class="panel">
-
-      <div id="timelineWrap" class="timeline-wrap"></div>
-
-      <div class="meta" id="metaText"></div>
-
-      <div class="chart-title">Burndown Chart</div>
-
-      <div class="chart-wrap">
-
-        <canvas id="burndownCanvas" height="220"></canvas>
-
+      <div class="phase-legend">
+        <span class="phase-legend-item"><span class="phase-dot" style="background: var(--analysis);"></span>Analysis</span>
+        <span class="phase-legend-item"><span class="phase-dot" style="background: var(--event);"></span>Event creation</span>
+        <span class="phase-legend-item"><span class="phase-dot" style="background: var(--build);"></span>Build</span>
       </div>
-
+      <div id="timelineWrap" class="timeline-wrap"></div>
+      <div class="meta" id="metaText"></div>
+      <div class="chart-title">Burndown Chart (person-days)</div>
+      <div class="chart-wrap">
+        <canvas id="burndownCanvas" height="220"></canvas>
+      </div>
     </section>
-
   </div>
 
-
-
   <script>
-
-    const STORAGE_KEY = 'roadmap_generator_settings_v2';
-
-
+    const STORAGE_KEY = 'roadmap_observability_v4';
 
     const SIZE_TO_MANDAY = {
-
       S: 3,
-
       M: 5,
-
       L: 10,
-
       XL: 15,
-
       XXL: 20,
-
       XXXL: 25
-
     };
 
-
-
     const FIXED_ITEMS = [
-
       { name: 'Login & Registration Journey Performance Dashboards', size: 'XL' },
-
       { name: 'Interactive Landing Page', size: 'M', mandayOverride: 0 },
-
       { name: 'Health & Check Performance Dashboard', size: 'XXXL' },
-
       { name: 'OneApp Push vs Pull (Login + SCA Counts)', size: 'S' },
-
       { name: 'BBA-specific technical dashboards', size: 'M' },
-
       { name: 'Digital Money Manager - High Level Overview', size: 'XL' },
-
       { name: 'Crash Dashboard', size: 'M' },
-
       { name: 'Cards/SCA Single Pane of Glass', size: 'XXL' },
-
       { name: 'Business KPI', size: 'M' },
-
       { name: 'Error dashboard for the HIDSDK errors (MRUM)', size: 'L' },
-
       { name: 'OneApp Push vs Pull Service', size: 'S' },
-
       { name: 'Aurora DB Monitoring Dashboard', size: 'M' },
-
       { name: 'Networking Monitoring Dashboard', size: 'M' },
-
       { name: 'Ingress Layer Monitoring Dashboard', size: 'M' },
-
       { name: 'Load Balancers Monitoring Dashboard', size: 'M' },
-
       { name: 'Other Business Transactions Dashboards', size: 'XXXL' },
-
       { name: 'PSD2PROD SinglePaneofGlass', size: 'XL' },
-
       { name: 'BBA ART & Infrastructure Performance Monitoring', size: 'XL' },
-
       { name: 'Elastic Cache Redis Monitoring', size: 'M', mandayOverride: 0 },
-
       { name: 'BBA Single Pane of Glass', size: 'XL' },
-
       { name: 'Top 4 Journeys Dashboards - Registration', size: 'XL', mandayOverride: 0 },
-
       { name: 'Overall DSO Performance', size: 'L' },
-
       { name: 'Top 4 Journeys Dashboards - Login', size: 'XL', mandayOverride: 0 },
-
       { name: 'Top 5 Business Journeys - Transactions', size: 'XL' },
-
       { name: 'Top 4 Journeys Dashboards - Payments', size: 'XXL', mandayOverride: 0 },
-
       { name: 'App Performance - Low Level', size: 'XL' },
-
       { name: 'Digital Money Manager - Top Transactions', size: 'XXL' },
-
       { name: 'AppD Null Issue Validation', size: 'M' },
-
       { name: 'Load Distribution Dashboard', size: 'L' },
-
       { name: 'Validation Failure and Success Analysis Dashboard for SCA', size: 'M' },
-
       { name: 'Cards Control - No Cards Screen', size: 'M' },
-
       { name: 'Device Registration against Location', size: 'M' },
-
       { name: 'AppDSDK - User Distribution stats by Country', size: 'M' },
-
       { name: 'Biometrics BTs and Service Endpoint', size: 'M' },
-
       { name: 'Application Performance - Low Level', size: 'XL' },
-
       { name: 'Top 4 Journeys Dashboards - Statements', size: 'XXL' }
-
     ].map((item, index) => ({
-
       id: `fixed-${index + 1}`,
-
       name: item.name,
-
       size: item.size,
-
       manday: item.mandayOverride ?? SIZE_TO_MANDAY[item.size]
-
     }));
 
+    const DEFAULT_METRICS = [
+      83, 0, 74, 8, 0, 16, 6, 74, 24, 7, 8, 9, 7, 4, 8, 251, 69, 245,
+      21, 87, 0, 29, 0, 77
+    ];
 
-
+    const analystCountInput = document.getElementById('analystCount');
+    const eventCreatorCountInput = document.getElementById('eventCreatorCount');
     const developerCountInput = document.getElementById('developerCount');
-
     const startDateInput = document.getElementById('startDate');
-
     const itemList = document.getElementById('itemList');
-
     const timelineWrap = document.getElementById('timelineWrap');
-
     const metaText = document.getElementById('metaText');
-
     const burndownCanvas = document.getElementById('burndownCanvas');
 
-
+    const metricsByItemId = {};
 
     loadState();
-
     renderItems();
-
     renderTimeline();
 
-
-
-    developerCountInput.addEventListener('change', () => {
-
-      const value = Math.max(1, parseInt(developerCountInput.value, 10) || 1);
-
-      developerCountInput.value = String(value);
-
-      saveState();
-
-      renderTimeline();
-
-    });
-
-
+    analystCountInput.addEventListener('change', onCapacityChange);
+    eventCreatorCountInput.addEventListener('change', onCapacityChange);
+    developerCountInput.addEventListener('change', onCapacityChange);
 
     startDateInput.addEventListener('change', () => {
-
       saveState();
-
       renderTimeline();
-
     });
 
-
+    function onCapacityChange() {
+      analystCountInput.value = String(Math.max(1, parseInt(analystCountInput.value, 10) || 1));
+      eventCreatorCountInput.value = String(Math.max(1, parseInt(eventCreatorCountInput.value, 10) || 1));
+      developerCountInput.value = String(Math.max(1, parseInt(developerCountInput.value, 10) || 1));
+      saveState();
+      renderTimeline();
+    }
 
     function loadState() {
-
       const fallback = formatDateInput(new Date());
-
       startDateInput.value = fallback;
 
-
-
       const raw = localStorage.getItem(STORAGE_KEY);
-
-      if (!raw) return;
-
-
+      if (!raw) {
+        FIXED_ITEMS.forEach((item, index) => {
+          metricsByItemId[item.id] = getDefaultMetricsForIndex(index);
+        });
+        return;
+      }
 
       try {
-
         const state = JSON.parse(raw);
+        const analystCount = parseInt(state.analystCount, 10);
+        const eventCreatorCount = parseInt(state.eventCreatorCount, 10);
+        const developerCount = parseInt(state.developerCount, 10);
 
-        const count = parseInt(state.developerCount, 10);
+        if (Number.isFinite(analystCount) && analystCount > 0) analystCountInput.value = String(analystCount);
+        if (Number.isFinite(eventCreatorCount) && eventCreatorCount > 0) eventCreatorCountInput.value = String(eventCreatorCount);
+        if (Number.isFinite(developerCount) && developerCount > 0) developerCountInput.value = String(developerCount);
+        if (typeof state.startDate === 'string' && parseDateInput(state.startDate)) startDateInput.value = state.startDate;
 
-        if (Number.isFinite(count) && count > 0) developerCountInput.value = String(count);
-
-        if (typeof state.startDate === 'string' && parseDateInput(state.startDate)) {
-
-          startDateInput.value = state.startDate;
-
-        }
-
+        FIXED_ITEMS.forEach((item, index) => {
+          const v = state.metricsByItemId ? Number(state.metricsByItemId[item.id]) : NaN;
+          metricsByItemId[item.id] = Number.isFinite(v) && v >= 0 ? v : getDefaultMetricsForIndex(index);
+        });
       } catch {
-
-        const count = parseInt(raw, 10);
-
-        if (Number.isFinite(count) && count > 0) developerCountInput.value = String(count);
-
+        FIXED_ITEMS.forEach((item, index) => {
+          metricsByItemId[item.id] = getDefaultMetricsForIndex(index);
+        });
       }
-
     }
 
-
+    function getDefaultMetricsForIndex(index) {
+      const v = Number(DEFAULT_METRICS[index]);
+      return Number.isFinite(v) && v >= 0 ? v : 0;
+    }
 
     function saveState() {
-
       const payload = {
-
+        analystCount: Math.max(1, parseInt(analystCountInput.value, 10) || 1),
+        eventCreatorCount: Math.max(1, parseInt(eventCreatorCountInput.value, 10) || 1),
         developerCount: Math.max(1, parseInt(developerCountInput.value, 10) || 1),
-
-        startDate: startDateInput.value
-
+        startDate: startDateInput.value,
+        metricsByItemId
       };
-
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-
     }
-
-
 
     function renderItems() {
-
       itemList.innerHTML = '';
-
       FIXED_ITEMS.forEach((item, idx) => {
-
         const li = document.createElement('li');
 
-        li.innerHTML = `<span><strong>${idx + 1}.</strong> ${escapeHtml(item.name)}</span><span class="small">${item.size} (${item.manday} MD)</span>`;
+        const left = document.createElement('span');
+        left.innerHTML = `<strong>${idx + 1}.</strong> ${escapeHtml(item.name)} <span class="small">(${item.size}, ${item.manday} build MD)</span>`;
 
+        const right = document.createElement('span');
+        right.className = 'metrics-wrap';
+        right.innerHTML = `<span class="small">Number of Metrics:</span>`;
+
+        const input = document.createElement('input');
+        input.className = 'metrics-input';
+        input.type = 'number';
+        input.min = '0';
+        input.step = '1';
+        input.value = String(metricsByItemId[item.id] ?? 0);
+        input.addEventListener('change', () => {
+          const value = Math.max(0, parseInt(input.value, 10) || 0);
+          input.value = String(value);
+          metricsByItemId[item.id] = value;
+          saveState();
+          renderTimeline();
+        });
+
+        right.appendChild(input);
+        li.appendChild(left);
+        li.appendChild(right);
         itemList.appendChild(li);
-
       });
-
     }
 
-
-
     function renderTimeline() {
-
       timelineWrap.innerHTML = '';
-
       metaText.textContent = '';
 
-
-
-      const developerCount = parseInt(developerCountInput.value, 10);
-
-      if (!Number.isFinite(developerCount) || developerCount < 1) {
-
-        metaText.textContent = 'Please set at least 1 available developer.';
-
-        clearBurndownChart('No data to display.');
-
-        return;
-
-      }
-
-
+      const analystCount = Math.max(1, parseInt(analystCountInput.value, 10) || 1);
+      const eventCreatorCount = Math.max(1, parseInt(eventCreatorCountInput.value, 10) || 1);
+      const developerCount = Math.max(1, parseInt(developerCountInput.value, 10) || 1);
 
       const rawStart = parseDateInput(startDateInput.value);
-
       if (!rawStart) {
-
         metaText.textContent = 'Please set a valid start date.';
-
         clearBurndownChart('No data to display.');
-
         return;
-
       }
 
-
-
       const start = moveToWorkingDay(rawStart);
-
-      const scheduled = scheduleItemsSequentially(FIXED_ITEMS, developerCount, start);
-
+      const scheduled = scheduleItemsSequentially(FIXED_ITEMS, metricsByItemId, analystCount, eventCreatorCount, developerCount, start);
       const maxOffset = scheduled.reduce((max, item) => Math.max(max, item.endOffset), 0);
-
       const dayCount = Math.max(1, Math.ceil(maxOffset));
-
       const end = addCalendarDays(start, dayCount - 1);
-
       const days = listDays(start, end);
 
       const milestoneIndex = Math.min(24, scheduled.length - 1);
-
       const milestoneOffset = milestoneIndex >= 0 ? scheduled[milestoneIndex].endOffset : 0;
 
-
-
       const timeline = document.createElement('div');
-
       timeline.className = 'timeline';
-
       timeline.style.minWidth = `calc(var(--name-w) + ${days.length} * var(--cell-w))`;
 
-
-
       const headerRow = document.createElement('div');
-
       headerRow.className = 'header-row';
-
       headerRow.appendChild(makeNameCell('Roadmap'));
-
       headerRow.appendChild(makeDaysRow(days, true));
-
       timeline.appendChild(headerRow);
 
-
-
       scheduled.forEach((item, idx) => {
-
         const roadmapRow = document.createElement('div');
-
         roadmapRow.className = 'roadmap-row';
-
         roadmapRow.appendChild(makeNameCell(`${idx + 1}. ${item.name}`));
 
-
-
         const lane = document.createElement('div');
-
         lane.className = 'lane';
-
         lane.appendChild(makeDaysRow(days, false));
 
-
-
         if (item.duration > 0) {
+          const drawablePhases = item.phases.filter((phase) => phase.endOffset > phase.startOffset);
+          let longestIndex = -1;
+          let longestWidth = -1;
 
-          const bar = document.createElement('div');
+          drawablePhases.forEach((phase, i) => {
+            const phaseWidth = phase.endOffset - phase.startOffset;
+            if (phaseWidth > longestWidth) {
+              longestWidth = phaseWidth;
+              longestIndex = i;
+            }
+          });
 
-          bar.className = 'bar';
-
-          const width = item.endOffset - item.startOffset;
-
-          bar.style.left = `calc(${item.startOffset} * var(--cell-w))`;
-
-          bar.style.width = `max(4px, calc(${width} * var(--cell-w) - 2px))`;
-
-          bar.textContent = `${item.size} (${item.manday} MD, ${formatDuration(item.duration)} d)`;
-
-          lane.appendChild(bar);
-
+          drawablePhases.forEach((phase, i) => {
+            const width = phase.endOffset - phase.startOffset;
+            const bar = document.createElement('div');
+            bar.className = `bar phase-${phase.type}`;
+            bar.style.left = `calc(${phase.startOffset} * var(--cell-w))`;
+            bar.style.width = `max(4px, calc(${width} * var(--cell-w) - 2px))`;
+            if (i === longestIndex) {
+              bar.textContent = `M:${item.metrics} | A:${formatDuration(item.analysisDays)}d E:${formatDuration(item.eventDays)}d B:${formatDuration(item.buildDays)}d`;
+            }
+            lane.appendChild(bar);
+          });
         }
 
-
-
         roadmapRow.appendChild(lane);
-
         timeline.appendChild(roadmapRow);
-
       });
 
-
-
       if (milestoneIndex >= 0) {
-
         const milestone = document.createElement('div');
-
         milestone.className = 'milestone-line';
-
         milestone.style.left = `calc(var(--name-w) + ${milestoneOffset} * var(--cell-w))`;
 
-
-
         const milestoneLabel = document.createElement('div');
-
         milestoneLabel.className = 'milestone-label';
-
         milestoneLabel.textContent = 'First 25 done';
-
         milestone.appendChild(milestoneLabel);
-
-
-
         timeline.appendChild(milestone);
-
       }
-
-
 
       timelineWrap.appendChild(timeline);
 
-      metaText.textContent = `Range: ${formatDate(start)} - ${formatDate(end)} | Items: ${FIXED_ITEMS.length} | Capacity: ${developerCount} developer${developerCount > 1 ? 's' : ''}`;
+      const totalPersonDays = scheduled.reduce((sum, item) => sum + item.totalEffortPersonDays, 0);
+      metaText.textContent = `Range: ${formatDate(start)} - ${formatDate(end)} | Items: ${FIXED_ITEMS.length} | Analysts: ${analystCount} | Event creators: ${eventCreatorCount} | Build devs: ${developerCount} | Total effort: ${formatDuration(totalPersonDays)} person-days`;
 
-      renderBurndownChart(start, end, scheduled, developerCount, milestoneOffset);
-
+      renderBurndownChart(start, end, scheduled, milestoneOffset);
     }
 
-
-
-    function scheduleItemsSequentially(items, developerCount, startDate) {
-
+    function scheduleItemsSequentially(items, metricsMap, analystCount, eventCreatorCount, developerCount, startDate) {
       const out = [];
-
       const baseStart = cloneDate(startDate);
 
-      let cursor = createCursor(moveToWorkingDay(baseStart), 0);
-
-
+      // Pipeline cursors: each role starts next item as soon as it is free.
+      let analystCursor = createCursor(moveToWorkingDay(baseStart), 0);
+      let eventCursor = createCursor(moveToWorkingDay(baseStart), 0);
+      let buildCursor = createCursor(moveToWorkingDay(baseStart), 0);
 
       items.forEach((item) => {
+        const metrics = Math.max(0, Number(metricsMap[item.id]) || 0);
 
-        const startCursor = cloneCursor(cursor);
+        const analysisDays = metrics === 0 ? 0 : metrics / (analystCount * 12);
+        const eventDays = metrics === 0 ? 0 : metrics / (eventCreatorCount * 12);
+        const buildDays = item.manday === 0 ? 0 : item.manday / developerCount;
 
-        const duration = item.manday === 0 ? 0 : item.manday / developerCount;
+        const phases = [];
 
-        if (duration === 0) {
+        const analysisStart = cloneCursor(analystCursor);
+        const analysisEnd = schedulePhase(phases, analysisStart, analysisDays, 'analysis', analystCount, baseStart);
+        if (analysisDays > 0) analystCursor = cloneCursor(analysisEnd);
 
-          const offset = cursorToCalendarOffset(baseStart, startCursor);
+        const eventStart = laterCursor(eventCursor, analysisEnd);
+        const eventEnd = schedulePhase(phases, eventStart, eventDays, 'event', eventCreatorCount, baseStart);
+        if (eventDays > 0) eventCursor = cloneCursor(eventEnd);
 
-          out.push({
+        const buildStart = laterCursor(buildCursor, eventEnd);
+        const buildEnd = schedulePhase(phases, buildStart, buildDays, 'build', developerCount, baseStart);
+        if (buildDays > 0) buildCursor = cloneCursor(buildEnd);
 
-            ...item,
-
-            start: cloneDate(startCursor.date),
-
-            end: cloneDate(startCursor.date),
-
-            startOffset: offset,
-
-            endOffset: offset,
-
-            duration
-
-          });
-
-          return;
-
-        }
-
-
-
-        const endCursor = addWorkingDuration(startCursor, duration);
+        const itemStartCursor = firstActiveCursor(analysisStart, eventStart, buildStart, analysisDays, eventDays, buildDays);
+        const itemEndCursor = lastActiveCursor(analysisEnd, eventEnd, buildEnd, analysisDays, eventDays, buildDays, itemStartCursor);
 
         out.push({
-
           ...item,
-
-          start: cloneDate(startCursor.date),
-
-          end: cloneDate(endCursor.date),
-
-          startOffset: cursorToCalendarOffset(baseStart, startCursor),
-
-          endOffset: cursorToCalendarOffset(baseStart, endCursor),
-
-          duration
-
+          metrics,
+          analysisDays,
+          eventDays,
+          buildDays,
+          duration: Math.max(0, cursorToCalendarOffset(baseStart, itemEndCursor) - cursorToCalendarOffset(baseStart, itemStartCursor)),
+          startOffset: cursorToCalendarOffset(baseStart, itemStartCursor),
+          endOffset: cursorToCalendarOffset(baseStart, itemEndCursor),
+          phases,
+          totalEffortPersonDays: metrics / 12 + metrics / 12 + item.manday
         });
-
-        cursor = endCursor;
-
       });
-
-
 
       return out;
-
     }
 
+    function schedulePhase(phases, startCursor, durationDays, phaseType, burnRate, baseStart) {
+      const cursor = cloneCursor(startCursor);
+      if (durationDays <= 0) return cursor;
 
+      const endCursor = addWorkingDuration(cursor, durationDays);
+      phases.push({
+        type: phaseType,
+        startOffset: cursorToCalendarOffset(baseStart, cursor),
+        endOffset: cursorToCalendarOffset(baseStart, endCursor),
+        burnPerDay: burnRate
+      });
+      return endCursor;
+    }
 
-    function renderBurndownChart(start, end, scheduled, developerCount, milestoneOffset) {
+    function cursorEpoch(cursor) {
+      return stripTime(cursor.date).getTime() + cursor.fraction * 24 * 60 * 60 * 1000;
+    }
 
+    function laterCursor(a, b) {
+      return cursorEpoch(a) >= cursorEpoch(b) ? cloneCursor(a) : cloneCursor(b);
+    }
+
+    function firstActiveCursor(analysisStart, eventStart, buildStart, analysisDays, eventDays, buildDays) {
+      if (analysisDays > 0) return cloneCursor(analysisStart);
+      if (eventDays > 0) return cloneCursor(eventStart);
+      if (buildDays > 0) return cloneCursor(buildStart);
+      return cloneCursor(analysisStart);
+    }
+
+    function lastActiveCursor(analysisEnd, eventEnd, buildEnd, analysisDays, eventDays, buildDays, fallback) {
+      if (buildDays > 0) return cloneCursor(buildEnd);
+      if (eventDays > 0) return cloneCursor(eventEnd);
+      if (analysisDays > 0) return cloneCursor(analysisEnd);
+      return cloneCursor(fallback);
+    }
+
+    function renderBurndownChart(start, end, scheduled, milestoneOffset) {
       const ctx = burndownCanvas.getContext('2d');
-
       if (!ctx) return;
 
-
-
-      const series = buildBurndownSeries(start, end, scheduled, developerCount);
-
+      const series = buildBurndownSeries(start, end, scheduled);
       const total = series.length > 0 ? series[0].remainingStart : 0;
-
       const maxY = Math.max(1, Math.ceil(total));
-
       const count = series.length;
-
       if (count === 0) return;
 
-
-
       const parentWidth = burndownCanvas.parentElement ? burndownCanvas.parentElement.clientWidth : 900;
-
       const width = Math.max(parentWidth - 4, 80 + count * 56);
-
       const height = 220;
-
       const dpr = window.devicePixelRatio || 1;
-
       burndownCanvas.width = Math.floor(width * dpr);
-
       burndownCanvas.height = Math.floor(height * dpr);
-
       burndownCanvas.style.width = `${width}px`;
-
       burndownCanvas.style.height = `${height}px`;
-
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-
 
       const pad = { left: 48, right: 16, top: 14, bottom: 48 };
-
       const chartW = width - pad.left - pad.right;
-
       const chartH = height - pad.top - pad.bottom;
 
-
-
       ctx.clearRect(0, 0, width, height);
-
       ctx.strokeStyle = '#d7dde4';
-
       ctx.lineWidth = 1;
-
       ctx.strokeRect(pad.left, pad.top, chartW, chartH);
 
-
-
       for (let i = 0; i <= 4; i++) {
-
         const y = pad.top + (chartH * i) / 4;
-
         const value = Math.round(maxY - (maxY * i) / 4);
-
         ctx.strokeStyle = '#edf2f7';
-
         ctx.beginPath();
-
         ctx.moveTo(pad.left, y);
-
         ctx.lineTo(pad.left + chartW, y);
-
         ctx.stroke();
 
-
-
         ctx.fillStyle = '#5f6c7b';
-
         ctx.font = '12px Segoe UI';
-
         ctx.fillText(String(value), 10, y + 4);
-
       }
-
-
 
       const cellW = chartW / count;
-
-      const pointAtDayEnd = (i, remaining) => ({
-
-        x: pad.left + (i + 1) * cellW,
-
-        y: pad.top + chartH - (remaining / maxY) * chartH
-
-      });
-
       const yFor = (remaining) => pad.top + chartH - (remaining / maxY) * chartH;
 
-
-
       ctx.fillStyle = 'rgba(95, 108, 123, 0.10)';
-
       for (let i = 0; i < count; i++) {
-
         if (!series[i].isWeekend) continue;
-
         ctx.fillRect(pad.left + i * cellW, pad.top, cellW, chartH);
-
       }
-
-
 
       ctx.strokeStyle = '#e3e9ef';
-
       ctx.lineWidth = 1;
-
       for (let i = 0; i <= count; i++) {
-
         const x = pad.left + i * cellW;
-
         ctx.beginPath();
-
         ctx.moveTo(x, pad.top);
-
         ctx.lineTo(x, pad.top + chartH);
-
         ctx.stroke();
-
       }
-
-
 
       ctx.strokeStyle = '#9fb0c1';
-
       ctx.lineWidth = 1;
-
       ctx.setLineDash([5, 4]);
-
       ctx.beginPath();
-
       ctx.moveTo(pad.left, yFor(total));
-
       ctx.lineTo(pad.left + chartW, yFor(0));
-
       ctx.stroke();
-
       ctx.setLineDash([]);
 
-
-
       ctx.strokeStyle = '#1f7a8c';
-
       ctx.lineWidth = 2;
-
       ctx.beginPath();
-
       ctx.moveTo(pad.left, yFor(total));
-
       series.forEach((p, i) => {
-
-        const pos = pointAtDayEnd(i, p.remainingEnd);
-
-        ctx.lineTo(pos.x, pos.y);
-
+        const x = pad.left + (i + 1) * cellW;
+        ctx.lineTo(x, yFor(p.remainingEnd));
       });
-
       ctx.stroke();
 
-
-
       if (Number.isFinite(milestoneOffset)) {
-
         const clamped = Math.max(0, Math.min(count, milestoneOffset));
-
         const mx = pad.left + clamped * cellW;
-
         ctx.strokeStyle = '#d62828';
-
         ctx.lineWidth = 2;
-
         ctx.beginPath();
-
         ctx.moveTo(mx, pad.top);
-
         ctx.lineTo(mx, pad.top + chartH);
-
         ctx.stroke();
 
-
-
         ctx.fillStyle = '#d62828';
-
         ctx.font = '12px Segoe UI';
-
         ctx.fillText('First 25 done', mx + 4, pad.top + 12);
-
       }
-
-
 
       ctx.fillStyle = '#5f6c7b';
-
       ctx.font = '12px Segoe UI';
-
       for (let i = 0; i < count; i++) {
-
         const x = pad.left + (i + 0.5) * cellW;
-
         const label = series[i].label;
-
         ctx.save();
-
         ctx.translate(x - 8, height - 8);
-
         ctx.rotate(-Math.PI / 6);
-
         ctx.fillText(label, 0, 0);
-
         ctx.restore();
-
       }
-
     }
-
-
 
     function clearBurndownChart(text) {
-
       const ctx = burndownCanvas.getContext('2d');
-
       if (!ctx) return;
-
       const width = Math.max(500, (burndownCanvas.parentElement ? burndownCanvas.parentElement.clientWidth : 900) - 4);
-
       const height = 220;
-
       const dpr = window.devicePixelRatio || 1;
-
       burndownCanvas.width = Math.floor(width * dpr);
-
       burndownCanvas.height = Math.floor(height * dpr);
-
       burndownCanvas.style.width = `${width}px`;
-
       burndownCanvas.style.height = `${height}px`;
-
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-
-
       ctx.clearRect(0, 0, width, height);
-
       if (text) {
-
         ctx.fillStyle = '#5f6c7b';
-
         ctx.font = '12px Segoe UI';
-
         ctx.fillText(text, 14, 24);
-
       }
-
     }
 
-
-
-    function buildBurndownSeries(start, end, scheduled, developerCount) {
-
+    function buildBurndownSeries(start, end, scheduled) {
       const days = listDays(start, end);
-
-      const total = scheduled.reduce((sum, item) => sum + item.manday, 0);
-
+      const total = scheduled.reduce((sum, item) => sum + item.totalEffortPersonDays, 0);
       const points = [];
-
-
 
       let remainingTotal = total;
 
-
-
       days.forEach((day, dayIndex) => {
-
         const remainingStartOfDay = Math.round(remainingTotal * 100) / 100;
 
-
-
         if (isWeekend(day)) {
-
           points.push({
-
             label: formatShortDate(day),
-
             isWeekend: true,
-
             remainingStart: remainingStartOfDay,
-
             remainingEnd: Math.round(remainingTotal * 100) / 100
-
           });
-
           return;
-
         }
 
-
-
         let burnToday = 0;
-
         scheduled.forEach((item) => {
-
-          if (item.duration <= 0) return;
-
-          const overlap = Math.max(0, Math.min(item.endOffset, dayIndex + 1) - Math.max(item.startOffset, dayIndex));
-
-          if (overlap > 0) burnToday += overlap * developerCount;
-
+          item.phases.forEach((phase) => {
+            const overlap = Math.max(0, Math.min(phase.endOffset, dayIndex + 1) - Math.max(phase.startOffset, dayIndex));
+            if (overlap > 0) burnToday += overlap * phase.burnPerDay;
+          });
         });
-
-
 
         remainingTotal = Math.max(0, remainingTotal - burnToday);
 
-
-
         points.push({
-
           label: formatShortDate(day),
-
           isWeekend: false,
-
           remainingStart: remainingStartOfDay,
-
           remainingEnd: Math.round(remainingTotal * 100) / 100
-
         });
-
       });
-
-
 
       return points;
-
     }
-
-
 
     function makeNameCell(text) {
-
       const el = document.createElement('div');
-
       el.className = 'name-cell';
-
       el.textContent = text;
-
       return el;
-
     }
-
-
 
     function makeDaysRow(days, withLabels) {
-
       const row = document.createElement('div');
-
       row.className = 'days';
-
       row.style.width = `calc(${days.length} * var(--cell-w))`;
 
-
-
       days.forEach((d, i) => {
-
         const cell = document.createElement('div');
-
         cell.className = 'day-cell' + (isWeekend(d) ? ' weekend' : '');
-
         cell.style.left = `calc(${i} * var(--cell-w))`;
-
         if (withLabels) {
-
           const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
-
           cell.textContent = `${d.getMonth() + 1}/${d.getDate()} ${wd}`;
-
         }
-
         row.appendChild(cell);
-
       });
 
-
-
       return row;
-
     }
-
-
 
     function moveToWorkingDay(date) {
-
       const d = cloneDate(date);
-
       while (isWeekend(d)) d.setDate(d.getDate() + 1);
-
       return d;
-
     }
-
-
 
     function createCursor(date, fraction) {
-
       return { date: cloneDate(date), fraction: Math.min(1, Math.max(0, fraction)) };
-
     }
-
-
 
     function cloneCursor(cursor) {
-
       return createCursor(cursor.date, cursor.fraction);
-
     }
-
-
 
     function addWorkingDuration(startCursor, durationDays) {
-
       const cursor = cloneCursor(startCursor);
-
       if (durationDays <= 0) return cursor;
 
-
-
       let remaining = durationDays;
-
       if (isWeekend(cursor.date)) {
-
         cursor.date = moveToWorkingDay(cursor.date);
-
         cursor.fraction = 0;
-
       }
-
-
 
       while (remaining > 1e-9) {
-
         if (isWeekend(cursor.date)) {
-
           cursor.date = moveToWorkingDay(cursor.date);
-
           cursor.fraction = 0;
-
         }
-
-
 
         const availableToday = 1 - cursor.fraction;
-
         if (remaining < availableToday - 1e-9) {
-
           cursor.fraction += remaining;
-
           remaining = 0;
-
         } else {
-
           remaining -= availableToday;
-
           cursor.date.setDate(cursor.date.getDate() + 1);
-
           cursor.date = moveToWorkingDay(cursor.date);
-
           cursor.fraction = 0;
-
         }
-
       }
-
-
 
       if (cursor.fraction >= 1 - 1e-9) {
-
         cursor.date.setDate(cursor.date.getDate() + 1);
-
         cursor.date = moveToWorkingDay(cursor.date);
-
         cursor.fraction = 0;
-
       }
-
-
 
       cursor.fraction = Math.round(cursor.fraction * 1000) / 1000;
-
       return cursor;
-
     }
-
-
 
     function cursorToCalendarOffset(startDate, cursor) {
-
       return dayDiff(startDate, cursor.date) + cursor.fraction;
-
     }
-
-
 
     function isWeekend(date) {
-
       const day = date.getDay();
-
       return day === 0 || day === 6;
-
     }
-
-
 
     function listDays(start, end) {
-
       const arr = [];
-
       let d = cloneDate(start);
-
       while (d <= end) {
-
         arr.push(cloneDate(d));
-
         d.setDate(d.getDate() + 1);
-
       }
-
       return arr;
-
     }
-
-
 
     function addCalendarDays(start, days) {
-
       const d = cloneDate(start);
-
       d.setDate(d.getDate() + days);
-
       return d;
-
     }
-
-
 
     function dayDiff(a, b) {
-
       const ms = 24 * 60 * 60 * 1000;
-
       return Math.round((stripTime(b) - stripTime(a)) / ms);
-
     }
-
-
 
     function stripTime(d) {
-
       return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
     }
-
-
 
     function cloneDate(d) {
-
       return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
     }
-
-
 
     function formatDate(date) {
-
       return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-
     }
-
-
 
     function formatDateInput(date) {
-
-      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-
+      return formatDate(date);
     }
-
-
 
     function parseDateInput(value) {
-
       if (!value) return null;
-
       const [y, m, d] = value.split('-').map(Number);
-
       if (!y || !m || !d) return null;
-
       return new Date(y, m - 1, d);
-
     }
-
-
 
     function formatShortDate(date) {
-
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
       return `${date.getDate()} ${months[date.getMonth()]}`;
-
     }
-
-
 
     function formatDuration(value) {
-
       const rounded = Math.round(value * 100) / 100;
-
       return Number.isInteger(rounded) ? String(rounded) : String(rounded);
-
     }
-
-
 
     function escapeHtml(str) {
-
       return str
-
         .replaceAll('&', '&amp;')
-
         .replaceAll('<', '&lt;')
-
         .replaceAll('>', '&gt;')
-
         .replaceAll('"', '&quot;')
-
         .replaceAll("'", '&#39;');
-
     }
 
-
-
     window.addEventListener('resize', renderTimeline);
-
   </script>
-
 </body>
-
 </html>
-
