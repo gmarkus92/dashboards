@@ -492,8 +492,16 @@
       const end = addCalendarDays(start, dayCount - 1);
       const days = listDays(start, end);
 
-      const milestoneIndex = Math.min(24, scheduled.length - 1);
-      const milestoneOffset = milestoneIndex >= 0 ? scheduled[milestoneIndex].endOffset : 0;
+      const first25 = scheduled.slice(0, 25);
+      const milestoneOffset = first25.length > 0
+        ? first25.reduce((max, item) => {
+            const buildPhaseEnds = item.phases
+              .filter((phase) => phase.type === 'build')
+              .map((phase) => phase.endOffset);
+            const doneAt = buildPhaseEnds.length > 0 ? Math.max(...buildPhaseEnds) : item.endOffset;
+            return Math.max(max, doneAt);
+          }, 0)
+        : 0;
 
       const timeline = document.createElement('div');
       timeline.className = 'timeline';
@@ -544,14 +552,14 @@
         timeline.appendChild(roadmapRow);
       });
 
-      if (milestoneIndex >= 0) {
+      if (first25.length > 0) {
         const milestone = document.createElement('div');
         milestone.className = 'milestone-line';
         milestone.style.left = `calc(var(--name-w) + ${milestoneOffset} * var(--cell-w))`;
 
         const milestoneLabel = document.createElement('div');
         milestoneLabel.className = 'milestone-label';
-        milestoneLabel.textContent = 'First 25 done';
+        milestoneLabel.textContent = 'First 25 build done';
         milestone.appendChild(milestoneLabel);
         timeline.appendChild(milestone);
       }
@@ -596,6 +604,7 @@
 
         const itemStartCursor = firstActiveCursor(analysisStart, eventStart, buildStart, analysisDays, eventDays, buildDays);
         const itemEndCursor = lastActiveCursor(analysisEnd, eventEnd, buildEnd, analysisDays, eventDays, buildDays, itemStartCursor);
+        const buildCompletionCursor = buildDays > 0 ? buildEnd : itemEndCursor;
 
         out.push({
           ...item,
@@ -606,6 +615,7 @@
           duration: Math.max(0, cursorToCalendarOffset(baseStart, itemEndCursor) - cursorToCalendarOffset(baseStart, itemStartCursor)),
           startOffset: cursorToCalendarOffset(baseStart, itemStartCursor),
           endOffset: cursorToCalendarOffset(baseStart, itemEndCursor),
+          buildCompletionOffset: cursorToCalendarOffset(baseStart, buildCompletionCursor),
           phases,
           totalEffortPersonDays: metrics / 12 + metrics / 12 + item.manday
         });
@@ -743,7 +753,7 @@
 
         ctx.fillStyle = '#d62828';
         ctx.font = '12px Segoe UI';
-        ctx.fillText('First 25 done', mx + 4, pad.top + 12);
+        ctx.fillText('First 25 build done', mx + 4, pad.top + 12);
       }
 
       ctx.fillStyle = '#5f6c7b';
