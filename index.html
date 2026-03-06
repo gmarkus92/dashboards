@@ -49,6 +49,14 @@
 
     .panel h2 { margin: 0 0 10px; font-size: 12px; }
 
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
     .row {
       display: flex;
       gap: 8px;
@@ -260,7 +268,10 @@
     </section>
 
     <section class="panel">
-      <h2>Fixed Roadmap Items</h2>
+      <div class="panel-header">
+        <h2>Fixed Roadmap Items</h2>
+        <div class="small" id="metricsTotalLabel">Number of metrics: 0</div>
+      </div>
       <ul id="itemList"></ul>
     </section>
 
@@ -345,6 +356,7 @@
     const developerCountInput = document.getElementById('developerCount');
     const startDateInput = document.getElementById('startDate');
     const itemList = document.getElementById('itemList');
+    const metricsTotalLabel = document.getElementById('metricsTotalLabel');
     const timelineWrap = document.getElementById('timelineWrap');
     const metaText = document.getElementById('metaText');
     const burndownCanvas = document.getElementById('burndownCanvas');
@@ -424,7 +436,9 @@
 
     function renderItems() {
       itemList.innerHTML = '';
+      let totalMetrics = 0;
       FIXED_ITEMS.forEach((item, idx) => {
+        totalMetrics += Math.max(0, Number(metricsByItemId[item.id]) || 0);
         const li = document.createElement('li');
 
         const left = document.createElement('span');
@@ -453,6 +467,7 @@
         li.appendChild(right);
         itemList.appendChild(li);
       });
+      metricsTotalLabel.textContent = `Number of metrics: ${totalMetrics}`;
     }
 
     function renderTimeline() {
