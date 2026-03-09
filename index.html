@@ -488,7 +488,7 @@
       </div>
       <div id="timelineWrap" class="timeline-wrap"></div>
       <div class="meta" id="metaText"></div>
-      <div class="chart-title">Burndown Chart (person-days)</div>
+      <div class="chart-title">Burndown Chart (remaining items)</div>
       <div class="chart-wrap">
         <canvas id="burndownCanvas" height="220"></canvas>
       </div>
@@ -1369,39 +1369,30 @@
 
     function buildBurndownSeries(start, end, scheduled) {
       const days = listDays(start, end);
-      const total = scheduled.reduce((sum, item) => sum + item.totalEffortPersonDays, 0);
+      const completionOffsets = scheduled.map((item) => Number(item.buildCompletionOffset) || 0);
       const points = [];
 
-      let remainingTotal = total;
-
       days.forEach((day, dayIndex) => {
-        const remainingStartOfDay = Math.round(remainingTotal * 100) / 100;
+        const dayStart = dayIndex;
+        const dayEnd = dayIndex + 1;
+        const remainingStartOfDay = completionOffsets.filter((offset) => offset > dayStart + 1e-9).length;
+        const remainingEndOfDay = completionOffsets.filter((offset) => offset > dayEnd + 1e-9).length;
 
         if (isWeekend(day)) {
           points.push({
             label: formatShortDate(day),
             isWeekend: true,
             remainingStart: remainingStartOfDay,
-            remainingEnd: Math.round(remainingTotal * 100) / 100
+            remainingEnd: remainingEndOfDay
           });
           return;
         }
-
-        let burnToday = 0;
-        scheduled.forEach((item) => {
-          item.phases.forEach((phase) => {
-            const overlap = Math.max(0, Math.min(phase.endOffset, dayIndex + 1) - Math.max(phase.startOffset, dayIndex));
-            if (overlap > 0) burnToday += overlap * phase.burnPerDay;
-          });
-        });
-
-        remainingTotal = Math.max(0, remainingTotal - burnToday);
 
         points.push({
           label: formatShortDate(day),
           isWeekend: false,
           remainingStart: remainingStartOfDay,
-          remainingEnd: Math.round(remainingTotal * 100) / 100
+          remainingEnd: remainingEndOfDay
         });
       });
 
