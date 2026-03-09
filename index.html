@@ -483,6 +483,14 @@
       white-space: nowrap;
     }
 
+    .milestone-line.first-15 {
+      background: #f59e0b;
+    }
+
+    .milestone-line.first-15 .milestone-label {
+      color: #b45309;
+    }
+
     .today-line {
       position: absolute;
       top: 0;
@@ -1173,14 +1181,30 @@
       const unitDivisor = timelineViewMode === 'week' ? 7 : 1;
       const unitCount = Math.max(1, Math.ceil(days.length / unitDivisor));
       const tinyBarThreshold = timelineViewMode === 'week' ? 0.2 : 0.08;
+      const baseCellWidth = getCssPxVar('--cell-w', 42);
+      const nameWidth = getCssPxVar('--name-w', 320);
+      let effectiveCellWidth = baseCellWidth;
+
+      if (timelineViewMode === 'week' && unitCount > 0) {
+        const availableTimelineWidth = Math.max(0, timelineWrap.clientWidth - nameWidth);
+        const fillCellWidth = availableTimelineWidth / unitCount;
+        if (Number.isFinite(fillCellWidth) && fillCellWidth > effectiveCellWidth) {
+          effectiveCellWidth = Math.round(fillCellWidth * 100) / 100;
+        }
+      }
 
       const first25 = scheduled.slice(0, 25);
+      const first15 = scheduled.slice(0, 15);
+      const milestoneFirst15Offset = first15.length > 0
+        ? first15.reduce((max, item) => Math.max(max, item.buildCompletionOffset), 0)
+        : 0;
       const milestoneOffset = first25.length > 0
         ? first25.reduce((max, item) => Math.max(max, item.buildCompletionOffset), 0)
         : 0;
 
       const timeline = document.createElement('div');
       timeline.className = 'timeline';
+      timeline.style.setProperty('--cell-w', `${effectiveCellWidth}px`);
       timeline.style.minWidth = `calc(var(--name-w) + ${unitCount} * var(--cell-w))`;
 
       const headerRow = document.createElement('div');
@@ -1305,6 +1329,18 @@
           });
         }
       });
+
+      if (first15.length > 0) {
+        const milestone15 = document.createElement('div');
+        milestone15.className = 'milestone-line first-15';
+        milestone15.style.left = `calc(var(--name-w) + ${milestoneFirst15Offset / unitDivisor} * var(--cell-w))`;
+
+        const milestone15Label = document.createElement('div');
+        milestone15Label.className = 'milestone-label';
+        milestone15Label.textContent = 'First 15 build done';
+        milestone15.appendChild(milestone15Label);
+        timeline.appendChild(milestone15);
+      }
 
       if (first25.length > 0) {
         const milestone = document.createElement('div');
@@ -1959,6 +1995,11 @@
       const d = cloneDate(start);
       d.setDate(d.getDate() + days);
       return d;
+    }
+
+    function getCssPxVar(varName, fallback) {
+      const value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(varName));
+      return Number.isFinite(value) ? value : fallback;
     }
 
     function dayDiff(a, b) {
