@@ -97,7 +97,7 @@
 
     .optimizer-actions {
       display: inline-flex;
-      align-items: center;
+      align-items: flex-end;
       gap: 8px;
     }
 
@@ -127,6 +127,17 @@
       align-self: flex-start;
       color: var(--muted);
       user-select: none;
+    }
+
+    .optimizer-actions .optimizer-check {
+      align-self: flex-end;
+      margin-bottom: 2px;
+    }
+
+    .optimizer-note {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
     }
 
     .optimizer-check input[type="checkbox"] {
@@ -160,6 +171,39 @@
 
     li:hover {
       background: #f4f9fd;
+    }
+
+    .metrics-detail-row {
+      display: block;
+      padding: 8px 10px;
+      background: #f7fafc;
+      border: 1px dashed #cfd8e3;
+    }
+
+    .metrics-detail-row:hover {
+      background: #f7fafc;
+    }
+
+    .metrics-detail-title {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .metrics-detail-list {
+      margin: 0;
+      padding-left: 18px;
+      max-height: 160px;
+      overflow: auto;
+    }
+
+    .metrics-detail-list li {
+      border: 0;
+      border-radius: 0;
+      padding: 1px 0;
+      display: list-item;
+      background: transparent;
+      transition: none;
     }
 
     li.draggable-item {
@@ -209,6 +253,37 @@
 
     li.draggable-item.dragging .drag-handle {
       cursor: grabbing;
+    }
+
+    .expand-toggle {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+      line-height: 1;
+      font-size: 12px;
+      min-width: 12px;
+    }
+
+    .expand-toggle:hover {
+      border: 0;
+      background: transparent;
+      color: #334155;
+    }
+
+    .name-content {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .metric-name-cell {
+      font-size: 11px;
+      color: var(--muted);
+      padding-left: 20px;
     }
 
     .timeline-wrap {
@@ -268,8 +343,8 @@
 
     .bar {
       position: absolute;
-      top: 7px;
-      height: calc(var(--row-h) - 14px);
+      top: 5px;
+      height: calc(var(--row-h) - 20px);
       border-radius: 8px;
       color: #fff;
       display: flex;
@@ -280,12 +355,29 @@
       white-space: nowrap;
       text-overflow: ellipsis;
       box-shadow: 0 2px 6px rgba(31, 122, 140, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      opacity: 0.92;
       z-index: 1;
     }
 
-    .bar.phase-analysis { background: linear-gradient(90deg, var(--analysis) 0%, #4d8fe0 100%); }
-    .bar.phase-event { background: linear-gradient(90deg, var(--event) 0%, #f7b84f 100%); }
-    .bar.phase-build { background: linear-gradient(90deg, var(--build) 0%, #34d399 100%); }
+    .bar.phase-analysis { top: 5px; background: linear-gradient(90deg, var(--analysis) 0%, #4d8fe0 100%); }
+    .bar.phase-event { top: 10px; background: linear-gradient(90deg, var(--event) 0%, #f7b84f 100%); }
+    .bar.phase-build { top: 15px; background: linear-gradient(90deg, var(--build) 0%, #34d399 100%); }
+
+    .bar-dot {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 1px 3px rgba(23, 33, 43, 0.3);
+      transform: translateX(-50%);
+      z-index: 2;
+    }
+
+    .bar-dot.phase-analysis { top: 11px; background: #2f7ed8; }
+    .bar-dot.phase-event { top: 16px; background: #f59e0b; }
+    .bar-dot.phase-build { top: 21px; background: #10b981; }
 
     .phase-legend {
       display: flex;
@@ -369,13 +461,14 @@
       <div class="small">Rates: Analysis = 12 metrics/analyst/day, Event creation = 12 metrics/event-creator/day.</div>
       <div class="optimizer-controls">
         <div class="optimizer-actions">
-          <button id="offerBestBtn" type="button" title="Calculate the fastest path to completion">Offer me the best</button>
+          <button id="offerBestBtn" type="button">Offer me the best</button>
+          <label class="optimizer-check">
+            <input id="onlyFirst25" type="checkbox" checked />
+            <span>Only first 25</span>
+          </label>
           <button id="resetListBtn" type="button" title="Reset to the original order">Reset list</button>
         </div>
-        <label class="optimizer-check">
-          <input id="onlyFirst25" type="checkbox" checked />
-          <span>Only first 25</span>
-        </label>
+        <div class="optimizer-note">Calculates the fastest path to completion.</div>
       </div>
     </section>
 
@@ -463,7 +556,7 @@
 
     const DEFAULT_METRICS = [
       83, 74, 0, 8, 0, 16, 6, 74, 24, 7, 8, 9, 7, 4, 8, 251, 69, 245,
-      21, 87, 0, 29, 0, 77
+      0, 87, 0, 29, 0, 77
     ];
 
     const analystCountInput = document.getElementById('analystCount');
@@ -481,6 +574,8 @@
 
     const metricsByItemId = {};
     const priorityByItemId = {};
+    const expandedItemIds = new Set();
+    const expandedTimelineItemIds = new Set();
     let draggedItemId = null;
 
     loadState();
@@ -537,7 +632,8 @@
       itemList.innerHTML = '';
       let totalMetrics = 0;
       FIXED_ITEMS.forEach((item, idx) => {
-        totalMetrics += Math.max(0, Number(metricsByItemId[item.id]) || 0);
+        const metricCount = Math.max(0, Number(metricsByItemId[item.id]) || 0);
+        totalMetrics += metricCount;
         const li = document.createElement('li');
         li.className = 'draggable-item';
         li.draggable = true;
@@ -590,11 +686,24 @@
         dragHandle.title = 'Drag to reprioritize';
         dragHandle.setAttribute('aria-hidden', 'true');
 
+        const expandBtn = document.createElement('button');
+        expandBtn.className = 'expand-toggle';
+        expandBtn.type = 'button';
+        expandBtn.textContent = expandedItemIds.has(item.id) ? '▾' : '▸';
+        expandBtn.title = expandedItemIds.has(item.id) ? 'Hide metrics' : 'Show metrics';
+        expandBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          if (expandedItemIds.has(item.id)) expandedItemIds.delete(item.id);
+          else expandedItemIds.add(item.id);
+          renderItems();
+        });
+
         const leftText = document.createElement('span');
         const priority = priorityByItemId[item.id] || getPriorityForIndex(idx);
         leftText.innerHTML = `<strong>${idx + 1}.</strong> ${escapeHtml(item.name)} <span class="small">(${item.size}, ${item.manday} build MD, ${priority})</span>`;
 
         left.appendChild(dragHandle);
+        left.appendChild(expandBtn);
         left.appendChild(leftText);
 
         const right = document.createElement('span');
@@ -620,6 +729,26 @@
         li.appendChild(left);
         li.appendChild(right);
         itemList.appendChild(li);
+
+        if (expandedItemIds.has(item.id)) {
+          const detailsLi = document.createElement('li');
+          detailsLi.className = 'metrics-detail-row';
+
+          const title = document.createElement('div');
+          title.className = 'metrics-detail-title';
+          title.textContent = `Metrics (${metricCount})`;
+          detailsLi.appendChild(title);
+
+          const list = document.createElement('ul');
+          list.className = 'metrics-detail-list';
+          for (let i = 0; i < metricCount; i++) {
+            const metricLi = document.createElement('li');
+            metricLi.textContent = `Metric ${i + 1}`;
+            list.appendChild(metricLi);
+          }
+          detailsLi.appendChild(list);
+          itemList.appendChild(detailsLi);
+        }
       });
       metricsTotalLabel.textContent = `Number of metrics: ${totalMetrics}`;
     }
@@ -794,16 +923,11 @@
       const dayCount = Math.max(1, Math.ceil(maxOffset));
       const end = addCalendarDays(start, dayCount - 1);
       const days = listDays(start, end);
+      const tinyBarThreshold = 0.08;
 
       const first25 = scheduled.slice(0, 25);
       const milestoneOffset = first25.length > 0
-        ? first25.reduce((max, item) => {
-            const buildPhaseEnds = item.phases
-              .filter((phase) => phase.type === 'build')
-              .map((phase) => phase.endOffset);
-            const doneAt = buildPhaseEnds.length > 0 ? Math.max(...buildPhaseEnds) : item.endOffset;
-            return Math.max(max, doneAt);
-          }, 0)
+        ? first25.reduce((max, item) => Math.max(max, item.buildCompletionOffset), 0)
         : 0;
 
       const timeline = document.createElement('div');
@@ -819,7 +943,27 @@
       scheduled.forEach((item, idx) => {
         const roadmapRow = document.createElement('div');
         roadmapRow.className = 'roadmap-row';
-        roadmapRow.appendChild(makeNameCell(`${idx + 1}. ${item.name}`));
+        const itemNameCell = makeNameCell('');
+        const nameContent = document.createElement('span');
+        nameContent.className = 'name-content';
+
+        const expandBtn = document.createElement('button');
+        expandBtn.className = 'expand-toggle';
+        expandBtn.type = 'button';
+        expandBtn.textContent = expandedTimelineItemIds.has(item.id) ? '▾' : '▸';
+        expandBtn.title = expandedTimelineItemIds.has(item.id) ? 'Hide metrics' : 'Show metrics';
+        expandBtn.addEventListener('click', () => {
+          if (expandedTimelineItemIds.has(item.id)) expandedTimelineItemIds.delete(item.id);
+          else expandedTimelineItemIds.add(item.id);
+          renderTimeline();
+        });
+
+        const itemLabel = document.createElement('span');
+        itemLabel.textContent = `${idx + 1}. ${item.name}`;
+        nameContent.appendChild(expandBtn);
+        nameContent.appendChild(itemLabel);
+        itemNameCell.appendChild(nameContent);
+        roadmapRow.appendChild(itemNameCell);
 
         const lane = document.createElement('div');
         lane.className = 'lane';
@@ -840,19 +984,64 @@
 
           drawablePhases.forEach((phase, i) => {
             const width = phase.endOffset - phase.startOffset;
-            const bar = document.createElement('div');
-            bar.className = `bar phase-${phase.type}`;
-            bar.style.left = `calc(${phase.startOffset} * var(--cell-w))`;
-            bar.style.width = `max(4px, calc(${width} * var(--cell-w) - 2px))`;
-            if (i === longestIndex) {
-              bar.textContent = `M:${item.metrics} | A:${formatDuration(item.analysisDays)}d E:${formatDuration(item.eventDays)}d B:${formatDuration(item.buildDays)}d`;
+            if (width <= tinyBarThreshold) {
+              const dot = document.createElement('div');
+              const center = phase.startOffset + width / 2;
+              dot.className = `bar-dot phase-${phase.type}`;
+              dot.style.left = `calc(${center} * var(--cell-w))`;
+              lane.appendChild(dot);
+            } else {
+              const bar = document.createElement('div');
+              bar.className = `bar phase-${phase.type}`;
+              bar.style.left = `calc(${phase.startOffset} * var(--cell-w))`;
+              bar.style.width = `calc(${width} * var(--cell-w))`;
+              if (i === longestIndex) {
+                bar.textContent = `M:${item.metrics} | A:${formatDuration(item.analysisDays)}d E:${formatDuration(item.eventDays)}d B:${formatDuration(item.buildDays)}d`;
+              }
+              lane.appendChild(bar);
             }
-            lane.appendChild(bar);
           });
         }
 
         roadmapRow.appendChild(lane);
         timeline.appendChild(roadmapRow);
+
+        if (expandedTimelineItemIds.has(item.id) && Array.isArray(item.metricSchedules) && item.metricSchedules.length > 0) {
+          item.metricSchedules.forEach((metric) => {
+            const metricRow = document.createElement('div');
+            metricRow.className = 'roadmap-row';
+
+            const metricNameCell = makeNameCell(`Metric ${metric.index}`);
+            metricNameCell.classList.add('metric-name-cell');
+            metricRow.appendChild(metricNameCell);
+
+            const metricLane = document.createElement('div');
+            metricLane.className = 'lane';
+            metricLane.appendChild(makeDaysRow(days, false));
+
+            metric.phases
+              .filter((phase) => phase.endOffset > phase.startOffset)
+              .forEach((phase) => {
+                const width = phase.endOffset - phase.startOffset;
+                if (width <= tinyBarThreshold) {
+                  const dot = document.createElement('div');
+                  const center = phase.startOffset + width / 2;
+                  dot.className = `bar-dot phase-${phase.type}`;
+                  dot.style.left = `calc(${center} * var(--cell-w))`;
+                  metricLane.appendChild(dot);
+                } else {
+                  const bar = document.createElement('div');
+                  bar.className = `bar phase-${phase.type}`;
+                  bar.style.left = `calc(${phase.startOffset} * var(--cell-w))`;
+                  bar.style.width = `calc(${width} * var(--cell-w))`;
+                  metricLane.appendChild(bar);
+                }
+              });
+
+            metricRow.appendChild(metricLane);
+            timeline.appendChild(metricRow);
+          });
+        }
       });
 
       if (first25.length > 0) {
@@ -887,27 +1076,63 @@
       items.forEach((item) => {
         const metrics = Math.max(0, Number(metricsMap[item.id]) || 0);
 
-        const analysisDays = metrics === 0 ? 0 : metrics / (analystCount * 12);
-        const eventDays = metrics === 0 ? 0 : metrics / (eventCreatorCount * 12);
-        const buildDays = item.manday === 0 ? 0 : item.manday / developerCount;
+        const analysisPerMetric = metrics === 0 ? 0 : 1 / (analystCount * 12);
+        const eventPerMetric = metrics === 0 ? 0 : 1 / (eventCreatorCount * 12);
+        const buildPerMetric = metrics === 0 || item.manday === 0 ? 0 : (item.manday / developerCount) / metrics;
 
-        const phases = [];
+        const metricSchedules = [];
 
-        const analysisStart = cloneCursor(analystCursor);
-        const analysisEnd = schedulePhase(phases, analysisStart, analysisDays, 'analysis', analystCount, baseStart);
-        if (analysisDays > 0) analystCursor = cloneCursor(analysisEnd);
+        for (let i = 0; i < metrics; i++) {
+          const metricPhases = [];
 
-        const eventStart = laterCursor(eventCursor, analysisEnd);
-        const eventEnd = schedulePhase(phases, eventStart, eventDays, 'event', eventCreatorCount, baseStart);
-        if (eventDays > 0) eventCursor = cloneCursor(eventEnd);
+          const analysisStart = cloneCursor(analystCursor);
+          const analysisEnd = schedulePhase(metricPhases, analysisStart, analysisPerMetric, 'analysis', analystCount, baseStart);
+          if (analysisPerMetric > 0) analystCursor = cloneCursor(analysisEnd);
 
-        const buildStart = laterCursor(buildCursor, eventEnd);
-        const buildEnd = schedulePhase(phases, buildStart, buildDays, 'build', developerCount, baseStart);
-        if (buildDays > 0) buildCursor = cloneCursor(buildEnd);
+          const eventStart = laterCursor(eventCursor, analysisEnd);
+          const eventEnd = schedulePhase(metricPhases, eventStart, eventPerMetric, 'event', eventCreatorCount, baseStart);
+          if (eventPerMetric > 0) eventCursor = cloneCursor(eventEnd);
 
-        const itemStartCursor = firstActiveCursor(analysisStart, eventStart, buildStart, analysisDays, eventDays, buildDays);
-        const itemEndCursor = lastActiveCursor(analysisEnd, eventEnd, buildEnd, analysisDays, eventDays, buildDays, itemStartCursor);
-        const buildCompletionCursor = buildDays > 0 ? buildEnd : itemEndCursor;
+          const buildStart = laterCursor(buildCursor, eventEnd);
+          const buildEnd = schedulePhase(metricPhases, buildStart, buildPerMetric, 'build', developerCount, baseStart);
+          if (buildPerMetric > 0) buildCursor = cloneCursor(buildEnd);
+
+          const metricStartCursor = firstActiveCursor(analysisStart, eventStart, buildStart, analysisPerMetric, eventPerMetric, buildPerMetric);
+          const metricEndCursor = lastActiveCursor(analysisEnd, eventEnd, buildEnd, analysisPerMetric, eventPerMetric, buildPerMetric, metricStartCursor);
+          const metricBuildCompletionCursor = buildPerMetric > 0 ? buildEnd : metricEndCursor;
+
+          metricSchedules.push({
+            index: i + 1,
+            startOffset: cursorToCalendarOffset(baseStart, metricStartCursor),
+            endOffset: cursorToCalendarOffset(baseStart, metricEndCursor),
+            buildCompletionOffset: cursorToCalendarOffset(baseStart, metricBuildCompletionCursor),
+            phases: metricPhases
+          });
+        }
+
+        let syntheticPhases = [];
+        if (metrics === 0 && item.manday > 0) {
+          const syntheticStart = cloneCursor(buildCursor);
+          const syntheticEnd = schedulePhase(syntheticPhases, syntheticStart, item.manday / developerCount, 'build', developerCount, baseStart);
+          buildCursor = cloneCursor(syntheticEnd);
+        }
+
+        metricSchedules.sort((a, b) => a.buildCompletionOffset - b.buildCompletionOffset || a.index - b.index);
+
+        let phases = metricSchedules.length > 0
+          ? buildItemPhasesFromMetricSchedules(metricSchedules, analystCount, eventCreatorCount, developerCount)
+          : syntheticPhases.slice();
+
+        const analysisDays = metrics * analysisPerMetric;
+        const eventDays = metrics * eventPerMetric;
+        const buildDays = metrics * buildPerMetric + (metrics === 0 && item.manday > 0 ? item.manday / developerCount : 0);
+
+        const startOffset = phases.length > 0 ? Math.min(...phases.map((phase) => phase.startOffset)) : 0;
+        const buildCompletionOffset = metricSchedules.length > 0
+          ? Math.max(...metricSchedules.map((metric) => metric.buildCompletionOffset))
+          : (phases.length > 0 ? Math.max(...phases.map((phase) => phase.endOffset)) : startOffset);
+        const endOffset = buildCompletionOffset;
+        phases = alignItemPhasesWithEnd(phases, endOffset);
 
         out.push({
           ...item,
@@ -915,16 +1140,67 @@
           analysisDays,
           eventDays,
           buildDays,
-          duration: Math.max(0, cursorToCalendarOffset(baseStart, itemEndCursor) - cursorToCalendarOffset(baseStart, itemStartCursor)),
-          startOffset: cursorToCalendarOffset(baseStart, itemStartCursor),
-          endOffset: cursorToCalendarOffset(baseStart, itemEndCursor),
-          buildCompletionOffset: cursorToCalendarOffset(baseStart, buildCompletionCursor),
+          duration: Math.max(0, endOffset - startOffset),
+          startOffset,
+          endOffset,
+          buildCompletionOffset,
           phases,
+          metricSchedules,
           totalEffortPersonDays: metrics / 12 + metrics / 12 + item.manday
         });
       });
 
       return out;
+    }
+
+    function alignItemPhasesWithEnd(phases, endOffset) {
+      if (!Array.isArray(phases) || phases.length === 0) return [];
+
+      const clipped = phases
+        .map((phase) => ({
+          ...phase,
+          endOffset: Math.min(phase.endOffset, endOffset)
+        }))
+        .filter((phase) => phase.endOffset > phase.startOffset);
+
+      if (clipped.length === 0) return [];
+
+      const terminalType = clipped.some((phase) => phase.type === 'build')
+        ? 'build'
+        : clipped.some((phase) => phase.type === 'event')
+          ? 'event'
+          : 'analysis';
+
+      const terminalPhase = clipped.find((phase) => phase.type === terminalType);
+      if (terminalPhase) terminalPhase.endOffset = endOffset;
+
+      return clipped;
+    }
+
+    function buildItemPhasesFromMetricSchedules(metricSchedules, analystCount, eventCreatorCount, developerCount) {
+      const phaseRanges = {
+        analysis: { start: Number.POSITIVE_INFINITY, end: Number.NEGATIVE_INFINITY, burnPerDay: analystCount },
+        event: { start: Number.POSITIVE_INFINITY, end: Number.NEGATIVE_INFINITY, burnPerDay: eventCreatorCount },
+        build: { start: Number.POSITIVE_INFINITY, end: Number.NEGATIVE_INFINITY, burnPerDay: developerCount }
+      };
+
+      metricSchedules.forEach((metric) => {
+        metric.phases.forEach((phase) => {
+          const range = phaseRanges[phase.type];
+          if (!range) return;
+          range.start = Math.min(range.start, phase.startOffset);
+          range.end = Math.max(range.end, phase.endOffset);
+        });
+      });
+
+      return ['analysis', 'event', 'build']
+        .filter((type) => phaseRanges[type].end > phaseRanges[type].start)
+        .map((type) => ({
+          type,
+          startOffset: phaseRanges[type].start,
+          endOffset: phaseRanges[type].end,
+          burnPerDay: phaseRanges[type].burnPerDay
+        }));
     }
 
     function schedulePhase(phases, startCursor, durationDays, phaseType, burnRate, baseStart) {
