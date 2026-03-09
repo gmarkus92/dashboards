@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Status Overview</title>
+  <style>
+    :root {
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #d9dee7;
+      --track: #eef2f7;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      background: transparent;
+      padding: 0;
+    }
+
+    .panel {
+      width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .total {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .legend {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 18px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: #2b313a;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      display: inline-block;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+    }
+
+    .stacked-wrap {
+      background: var(--track);
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #d8dfe8;
+    }
+
+    .stacked-bar {
+      height: 64px;
+      width: 100%;
+      display: flex;
+      align-items: stretch;
+    }
+
+    .segment {
+      min-width: 0;
+      display: grid;
+      place-items: center;
+      font-size: 24px;
+      font-weight: 500;
+      color: #ffffff;
+      line-height: 1;
+      cursor: default;
+      transform-origin: center;
+      transition: transform 180ms ease, filter 180ms ease;
+      position: relative;
+      isolation: isolate;
+    }
+
+    .segment:hover {
+      transform: translateY(-2px) scaleY(1.04);
+      filter: brightness(1.08) saturate(1.1);
+      z-index: 1;
+    }
+
+    .segment.compact {
+      font-size: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .segment {
+        font-size: 18px;
+      }
+
+      .segment.compact {
+        font-size: 16px;
+      }
+
+      .stacked-bar {
+        height: 56px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <div class="header">
+      <h1>Status Dashboard</h1>
+      <div class="total">Total: <strong id="totalCount">0</strong></div>
+    </div>
+
+    <div id="legend" class="legend"></div>
+
+    <div class="stacked-wrap">
+      <div id="stackedBar" class="stacked-bar"></div>
+    </div>
+  </main>
+
+  <script>
+    // Edit values here:
+    const STATUS_DATA = [
+      { name: 'To Do', value: 20, color: '#63ccd0' },
+      { name: 'On Hold', value: 2, color: '#49b3cc' },
+      { name: 'Blocked', value: 1, color: '#368fba' },
+      { name: 'In Progress', value: 8, color: '#5779a8' },
+      { name: 'Ready To Review', value: 5, color: '#665f98' },
+      { name: 'Done', value: 0, color: '#30b266' }
+    ];
+
+    const totalCountEl = document.getElementById('totalCount');
+    const legendEl = document.getElementById('legend');
+    const stackedBarEl = document.getElementById('stackedBar');
+
+    function render() {
+      const normalized = STATUS_DATA.map((s) => ({
+        name: String(s.name),
+        value: Math.max(0, Number(s.value) || 0),
+        color: String(s.color)
+      }));
+
+      const total = normalized.reduce((sum, s) => sum + s.value, 0);
+      totalCountEl.textContent = String(total);
+
+      legendEl.innerHTML = '';
+      stackedBarEl.innerHTML = '';
+
+      const visible = normalized.filter((s) => s.value > 0);
+      const legendData = visible.length > 0 ? visible : normalized;
+
+      legendData.forEach((status) => {
+        const item = document.createElement('span');
+        item.className = 'legend-item';
+        item.innerHTML = `<span class="legend-dot" style="background:${status.color};"></span>${escapeHtml(status.name)}`;
+        legendEl.appendChild(item);
+      });
+
+      if (total <= 0) return;
+
+      visible.forEach((status) => {
+        const segment = document.createElement('div');
+        segment.className = 'segment';
+        const width = (status.value / total) * 100;
+        if (width < 8) segment.classList.add('compact');
+
+        segment.style.width = `${width}%`;
+        segment.style.background = status.color;
+        segment.textContent = String(status.value);
+        segment.title = `${status.name}: ${status.value}`;
+
+        stackedBarEl.appendChild(segment);
+      });
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    render();
+  </script>
+</body>
+</html>
