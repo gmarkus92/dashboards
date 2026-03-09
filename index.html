@@ -286,6 +286,21 @@
       padding-left: 20px;
     }
 
+    .item-done-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      background: #16a34a;
+      color: #ffffff;
+      font-size: 11px;
+      line-height: 1;
+      flex: 0 0 auto;
+      font-weight: 700;
+    }
+
     .metric-done-label {
       opacity: 0.75;
       text-decoration: line-through;
@@ -602,6 +617,9 @@
       'fixed-1': {
         all: { analysis: true }
       },
+      'fixed-3': {
+        all: { analysis: true, event: true, build: true }
+      },
       'fixed-11': {
         all: { analysis: true, event: true, build: true }
       },
@@ -818,6 +836,17 @@
       saveState();
       renderItems();
       renderTimeline();
+    }
+
+    function isItemFullyDone(itemId) {
+      const metricCount = Math.max(0, Number(metricsByItemId[itemId]) || 0);
+      if (metricCount === 0) {
+        const itemMap = METRIC_PHASE_DONE[itemId] || {};
+        const baseRaw = itemMap.all || {};
+        return !!(baseRaw.analysis && baseRaw.event && baseRaw.build);
+      }
+      const flags = getMetricPhaseFlagsForItem(itemId, metricCount);
+      return flags.length === metricCount && flags.every((f) => f.analysis && f.event && f.build);
     }
 
     function appendPhaseCheckboxGroup(container, phaseLabel, checked, onChange = null) {
@@ -1235,6 +1264,13 @@
         itemLabel.textContent = `${idx + 1}. ${item.name}`;
         nameContent.appendChild(expandBtn);
         nameContent.appendChild(itemLabel);
+        if (isItemFullyDone(item.id)) {
+          const doneIcon = document.createElement('span');
+          doneIcon.className = 'item-done-icon';
+          doneIcon.textContent = '✓';
+          doneIcon.title = 'All metrics are done (A/E/B)';
+          nameContent.appendChild(doneIcon);
+        }
         itemNameCell.appendChild(nameContent);
         roadmapRow.appendChild(itemNameCell);
 
