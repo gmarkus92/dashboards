@@ -95,6 +95,19 @@
       background: #fcfdfe;
     }
 
+    li.draggable-item {
+      cursor: grab;
+    }
+
+    li.draggable-item.dragging {
+      opacity: 0.6;
+    }
+
+    li.draggable-item.drag-over {
+      border-color: #2f7ed8;
+      box-shadow: inset 0 0 0 1px #2f7ed8;
+    }
+
     .small { color: var(--muted); font-size: 12px; }
 
     .metrics-wrap {
@@ -304,8 +317,8 @@
 
     const FIXED_ITEMS = [
       { name: 'Login & Registration Journey Performance Dashboards', size: 'XL' },
-      { name: 'Interactive Landing Page', size: 'M', mandayOverride: 0 },
       { name: 'Health & Check Performance Dashboard', size: 'XXXL' },
+      { name: 'Interactive Landing Page', size: 'M', mandayOverride: 0 },
       { name: 'OneApp Push vs Pull (Login + SCA Counts)', size: 'S' },
       { name: 'BBA-specific technical dashboards', size: 'M' },
       { name: 'Digital Money Manager - High Level Overview', size: 'XL' },
@@ -347,7 +360,7 @@
     }));
 
     const DEFAULT_METRICS = [
-      83, 0, 74, 8, 0, 16, 6, 74, 24, 7, 8, 9, 7, 4, 8, 251, 69, 245,
+      83, 74, 0, 8, 0, 16, 6, 74, 24, 7, 8, 9, 7, 4, 8, 251, 69, 245,
       21, 87, 0, 29, 0, 77
     ];
 
@@ -362,6 +375,7 @@
     const burndownCanvas = document.getElementById('burndownCanvas');
 
     const metricsByItemId = {};
+    let draggedItemId = null;
 
     loadState();
     renderItems();
@@ -407,6 +421,10 @@
         if (Number.isFinite(developerCount) && developerCount > 0) developerCountInput.value = String(developerCount);
         if (typeof state.startDate === 'string' && parseDateInput(state.startDate)) startDateInput.value = state.startDate;
 
+        if (Array.isArray(state.itemOrder) && state.itemOrder.length > 0) {
+          applyItemOrder(state.itemOrder);
+        }
+
         FIXED_ITEMS.forEach((item, index) => {
           const v = state.metricsByItemId ? Number(state.metricsByItemId[item.id]) : NaN;
           metricsByItemId[item.id] = Number.isFinite(v) && v >= 0 ? v : getDefaultMetricsForIndex(index);
@@ -429,6 +447,7 @@
         eventCreatorCount: Math.max(1, parseInt(eventCreatorCountInput.value, 10) || 1),
         developerCount: Math.max(1, parseInt(developerCountInput.value, 10) || 1),
         startDate: startDateInput.value,
+        itemOrder: FIXED_ITEMS.map((item) => item.id),
         metricsByItemId
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -440,6 +459,48 @@
       FIXED_ITEMS.forEach((item, idx) => {
         totalMetrics += Math.max(0, Number(metricsByItemId[item.id]) || 0);
         const li = document.createElement('li');
+        li.className = 'draggable-item';
+        li.draggable = true;
+        li.dataset.itemId = item.id;
+
+        li.addEventListener('dragstart', (event) => {
+          draggedItemId = item.id;
+          li.classList.add('dragging');
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', item.id);
+          }
+        });
+
+        li.addEventListener('dragend', () => {
+          draggedItemId = null;
+          li.classList.remove('dragging');
+          clearDragOverStyles();
+        });
+
+        li.addEventListener('dragover', (event) => {
+          event.preventDefault();
+          li.classList.add('drag-over');
+          if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+        });
+
+        li.addEventListener('dragleave', () => {
+          li.classList.remove('drag-over');
+        });
+
+        li.addEventListener('drop', (event) => {
+          event.preventDefault();
+          li.classList.remove('drag-over');
+
+          const sourceId = draggedItemId || (event.dataTransfer ? event.dataTransfer.getData('text/plain') : '');
+          const targetId = item.id;
+          if (!sourceId || sourceId === targetId) return;
+
+          reorderItems(sourceId, targetId);
+          saveState();
+          renderItems();
+          renderTimeline();
+        });
 
         const left = document.createElement('span');
         left.innerHTML = `<strong>${idx + 1}.</strong> ${escapeHtml(item.name)} <span class="small">(${item.size}, ${item.manday} build MD)</span>`;
@@ -459,6 +520,7 @@
           input.value = String(value);
           metricsByItemId[item.id] = value;
           saveState();
+          renderItems();
           renderTimeline();
         });
 
@@ -468,6 +530,35 @@
         itemList.appendChild(li);
       });
       metricsTotalLabel.textContent = `Number of metrics: ${totalMetrics}`;
+    }
+
+    function clearDragOverStyles() {
+      itemList.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+    }
+
+    function reorderItems(sourceId, targetId) {
+      const sourceIndex = FIXED_ITEMS.findIndex((item) => item.id === sourceId);
+      const targetIndex = FIXED_ITEMS.findIndex((item) => item.id === targetId);
+      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return;
+
+      const [moved] = FIXED_ITEMS.splice(sourceIndex, 1);
+      FIXED_ITEMS.splice(targetIndex, 0, moved);
+    }
+
+    function applyItemOrder(orderIds) {
+      const byId = new Map(FIXED_ITEMS.map((item) => [item.id, item]));
+      const reordered = [];
+
+      orderIds.forEach((id) => {
+        const item = byId.get(id);
+        if (item) reordered.push(item);
+      });
+
+      FIXED_ITEMS.forEach((item) => {
+        if (!reordered.includes(item)) reordered.push(item);
+      });
+
+      FIXED_ITEMS.splice(0, FIXED_ITEMS.length, ...reordered);
     }
 
     function renderTimeline() {
