@@ -73,6 +73,68 @@
       width: 150px;
     }
 
+    button {
+      font: inherit;
+      border-radius: 8px;
+      border: 1px solid #1f7a8c;
+      background: #1f7a8c;
+      color: #fff;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #166a7a;
+      border-color: #166a7a;
+    }
+
+    .optimizer-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .optimizer-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .optimizer-controls #offerBestBtn,
+    .optimizer-controls #resetListBtn {
+      align-self: flex-start;
+      margin-top: 6px;
+    }
+
+    #resetListBtn {
+      background: #fff;
+      color: #1f7a8c;
+      border-color: #1f7a8c;
+    }
+
+    #resetListBtn:hover {
+      background: #eef7f9;
+      color: #166a7a;
+      border-color: #166a7a;
+    }
+
+    .optimizer-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      width: fit-content;
+      align-self: flex-start;
+      color: var(--muted);
+      user-select: none;
+    }
+
+    .optimizer-check input[type="checkbox"] {
+      width: auto;
+      padding: 0;
+      margin: 0;
+    }
+
     ul {
       list-style: none;
       margin: 8px 0 0;
@@ -300,6 +362,16 @@
         <input id="startDate" type="date" />
       </div>
       <div class="small">Rates: Analysis = 12 metrics/analyst/day, Event creation = 12 metrics/event-creator/day.</div>
+      <div class="optimizer-controls">
+        <div class="optimizer-actions">
+          <button id="offerBestBtn" type="button" title="Calculate the fastest path to completion">Offer me the best</button>
+          <button id="resetListBtn" type="button" title="Reset to the original order">Reset list</button>
+        </div>
+        <label class="optimizer-check">
+          <input id="onlyFirst25" type="checkbox" checked />
+          <span>Only first 25</span>
+        </label>
+      </div>
     </section>
 
     <section class="panel">
@@ -327,6 +399,7 @@
 
   <script>
     const STORAGE_KEY = 'roadmap_observability_v4';
+    const PRIORITY_LEVELS = ['Highest', 'High', 'Medium', 'Low'];
 
     const SIZE_TO_MANDAY = {
       S: 3,
@@ -381,6 +454,8 @@
       manday: item.mandayOverride ?? SIZE_TO_MANDAY[item.size]
     }));
 
+    const ORIGINAL_ITEM_ORDER_IDS = FIXED_ITEMS.map((item) => item.id);
+
     const DEFAULT_METRICS = [
       83, 74, 0, 8, 0, 16, 6, 74, 24, 7, 8, 9, 7, 4, 8, 251, 69, 245,
       21, 87, 0, 29, 0, 77
@@ -390,6 +465,9 @@
     const eventCreatorCountInput = document.getElementById('eventCreatorCount');
     const developerCountInput = document.getElementById('developerCount');
     const startDateInput = document.getElementById('startDate');
+    const offerBestBtn = document.getElementById('offerBestBtn');
+    const resetListBtn = document.getElementById('resetListBtn');
+    const onlyFirst25Input = document.getElementById('onlyFirst25');
     const itemList = document.getElementById('itemList');
     const metricsTotalLabel = document.getElementById('metricsTotalLabel');
     const timelineWrap = document.getElementById('timelineWrap');
@@ -397,6 +475,7 @@
     const burndownCanvas = document.getElementById('burndownCanvas');
 
     const metricsByItemId = {};
+    const priorityByItemId = {};
     let draggedItemId = null;
 
     loadState();
@@ -411,6 +490,8 @@
       saveState();
       renderTimeline();
     });
+    offerBestBtn.addEventListener('click', offerBestOrder);
+    resetListBtn.addEventListener('click', resetItemOrder);
 
     function onCapacityChange() {
       analystCountInput.value = String(Math.max(1, parseInt(analystCountInput.value, 10) || 1));
@@ -423,39 +504,19 @@
     function loadState() {
       const fallback = formatDateInput(new Date());
       startDateInput.value = fallback;
+      analystCountInput.value = '3';
+      eventCreatorCountInput.value = '20';
+      developerCountInput.value = '4';
+      onlyFirst25Input.checked = true;
 
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        FIXED_ITEMS.forEach((item, index) => {
-          metricsByItemId[item.id] = getDefaultMetricsForIndex(index);
-        });
-        return;
-      }
+      FIXED_ITEMS.forEach((item, index) => {
+        metricsByItemId[item.id] = getDefaultMetricsForIndex(index);
+      });
+      applyItemOrder(ORIGINAL_ITEM_ORDER_IDS);
+      recomputePrioritiesFromCurrentOrder();
 
-      try {
-        const state = JSON.parse(raw);
-        const analystCount = parseInt(state.analystCount, 10);
-        const eventCreatorCount = parseInt(state.eventCreatorCount, 10);
-        const developerCount = parseInt(state.developerCount, 10);
-
-        if (Number.isFinite(analystCount) && analystCount > 0) analystCountInput.value = String(analystCount);
-        if (Number.isFinite(eventCreatorCount) && eventCreatorCount > 0) eventCreatorCountInput.value = String(eventCreatorCount);
-        if (Number.isFinite(developerCount) && developerCount > 0) developerCountInput.value = String(developerCount);
-        if (typeof state.startDate === 'string' && parseDateInput(state.startDate)) startDateInput.value = state.startDate;
-
-        if (Array.isArray(state.itemOrder) && state.itemOrder.length > 0) {
-          applyItemOrder(state.itemOrder);
-        }
-
-        FIXED_ITEMS.forEach((item, index) => {
-          const v = state.metricsByItemId ? Number(state.metricsByItemId[item.id]) : NaN;
-          metricsByItemId[item.id] = Number.isFinite(v) && v >= 0 ? v : getDefaultMetricsForIndex(index);
-        });
-      } catch {
-        FIXED_ITEMS.forEach((item, index) => {
-          metricsByItemId[item.id] = getDefaultMetricsForIndex(index);
-        });
-      }
+      // Explicitly clear previously saved state so reload always starts clean.
+      localStorage.removeItem(STORAGE_KEY);
     }
 
     function getDefaultMetricsForIndex(index) {
@@ -464,15 +525,7 @@
     }
 
     function saveState() {
-      const payload = {
-        analystCount: Math.max(1, parseInt(analystCountInput.value, 10) || 1),
-        eventCreatorCount: Math.max(1, parseInt(eventCreatorCountInput.value, 10) || 1),
-        developerCount: Math.max(1, parseInt(developerCountInput.value, 10) || 1),
-        startDate: startDateInput.value,
-        itemOrder: FIXED_ITEMS.map((item) => item.id),
-        metricsByItemId
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      // Intentionally no-op: we do not persist state between reloads.
     }
 
     function renderItems() {
@@ -533,7 +586,8 @@
         dragHandle.setAttribute('aria-hidden', 'true');
 
         const leftText = document.createElement('span');
-        leftText.innerHTML = `<strong>${idx + 1}.</strong> ${escapeHtml(item.name)} <span class="small">(${item.size}, ${item.manday} build MD)</span>`;
+        const priority = priorityByItemId[item.id] || getPriorityForIndex(idx);
+        leftText.innerHTML = `<strong>${idx + 1}.</strong> ${escapeHtml(item.name)} <span class="small">(${item.size}, ${item.manday} build MD, ${priority})</span>`;
 
         left.appendChild(dragHandle);
         left.appendChild(leftText);
@@ -563,6 +617,126 @@
         itemList.appendChild(li);
       });
       metricsTotalLabel.textContent = `Number of metrics: ${totalMetrics}`;
+    }
+
+    function offerBestOrder() {
+      const analystCount = Math.max(1, parseInt(analystCountInput.value, 10) || 1);
+      const eventCreatorCount = Math.max(1, parseInt(eventCreatorCountInput.value, 10) || 1);
+      const developerCount = Math.max(1, parseInt(developerCountInput.value, 10) || 1);
+      const start = getPlanningStartDate();
+      recomputePrioritiesFromCurrentOrder();
+
+      const optimizeOnlyFirst25 = !!onlyFirst25Input.checked;
+      const targetCount = optimizeOnlyFirst25
+        ? Math.min(25, FIXED_ITEMS.length)
+        : FIXED_ITEMS.length;
+
+      const optimizedPrefix = buildFastestPriorityAwarePrefix(
+        FIXED_ITEMS,
+        targetCount,
+        analystCount,
+        eventCreatorCount,
+        developerCount,
+        start
+      );
+
+      if (optimizeOnlyFirst25) {
+        const pickedIds = new Set(optimizedPrefix.map((item) => item.id));
+        const rest = FIXED_ITEMS.filter((item) => !pickedIds.has(item.id));
+        FIXED_ITEMS.splice(0, FIXED_ITEMS.length, ...optimizedPrefix, ...rest);
+      } else {
+        FIXED_ITEMS.splice(0, FIXED_ITEMS.length, ...optimizedPrefix);
+      }
+
+      saveState();
+      renderItems();
+      renderTimeline();
+    }
+
+    function resetItemOrder() {
+      applyItemOrder(ORIGINAL_ITEM_ORDER_IDS);
+      saveState();
+      renderItems();
+      renderTimeline();
+    }
+
+    function buildFastestPriorityAwarePrefix(items, targetCount, analystCount, eventCreatorCount, developerCount, startDate) {
+      const remaining = items.slice();
+      let sequence = [];
+
+      for (const level of PRIORITY_LEVELS) {
+        if (sequence.length >= targetCount) break;
+        const groupStart = sequence.length;
+        const groupItems = remaining.filter((item) => (priorityByItemId[item.id] || 'Low') === level);
+
+        while (groupItems.length > 0 && sequence.length < targetCount) {
+          let bestObjective = Number.POSITIVE_INFINITY;
+          let bestCandidate = null;
+          let bestPickedId = '';
+
+          for (let i = 0; i < groupItems.length; i++) {
+            const candidateItem = groupItems[i];
+            for (let pos = groupStart; pos <= sequence.length; pos++) {
+              const candidateSequence = sequence.slice();
+              candidateSequence.splice(pos, 0, candidateItem);
+
+              const scheduled = scheduleItemsSequentially(
+                candidateSequence,
+                metricsByItemId,
+                analystCount,
+                eventCreatorCount,
+                developerCount,
+                startDate
+              );
+              const objective = getCompletionObjective(scheduled, candidateSequence.length);
+
+              if (objective < bestObjective - 1e-9) {
+                bestObjective = objective;
+                bestCandidate = candidateSequence;
+                bestPickedId = candidateItem.id;
+              }
+            }
+          }
+
+          if (!bestCandidate || !bestPickedId) break;
+          sequence = bestCandidate;
+
+          const removeRemainingIndex = remaining.findIndex((item) => item.id === bestPickedId);
+          if (removeRemainingIndex >= 0) remaining.splice(removeRemainingIndex, 1);
+
+          const removeGroupIndex = groupItems.findIndex((item) => item.id === bestPickedId);
+          if (removeGroupIndex >= 0) groupItems.splice(removeGroupIndex, 1);
+        }
+      }
+
+      return sequence;
+    }
+
+    function getCompletionObjective(scheduled, count) {
+      const limit = Math.min(count, scheduled.length);
+      let latest = 0;
+      for (let i = 0; i < limit; i++) {
+        latest = Math.max(latest, scheduled[i].buildCompletionOffset);
+      }
+      return latest;
+    }
+
+    function getPlanningStartDate() {
+      const parsed = parseDateInput(startDateInput.value);
+      return moveToWorkingDay(parsed || new Date());
+    }
+
+    function getPriorityForIndex(index) {
+      if (index < 3) return 'Highest';
+      if (index < 25) return 'High';
+      if (index < 30) return 'Medium';
+      return 'Low';
+    }
+
+    function recomputePrioritiesFromCurrentOrder() {
+      FIXED_ITEMS.forEach((item, index) => {
+        priorityByItemId[item.id] = getPriorityForIndex(index);
+      });
     }
 
     function clearDragOverStyles() {
