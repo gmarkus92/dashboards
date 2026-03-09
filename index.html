@@ -122,6 +122,28 @@
       padding: 4px 6px;
     }
 
+    .item-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .drag-handle {
+      width: 12px;
+      height: 14px;
+      border-radius: 4px;
+      opacity: 0.75;
+      flex: 0 0 auto;
+      cursor: grab;
+      background:
+        radial-gradient(circle, #8ea0b3 1.2px, transparent 1.3px) 0 0 / 6px 6px;
+    }
+
+    li.draggable-item.dragging .drag-handle {
+      cursor: grabbing;
+    }
+
     .timeline-wrap {
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -503,7 +525,18 @@
         });
 
         const left = document.createElement('span');
-        left.innerHTML = `<strong>${idx + 1}.</strong> ${escapeHtml(item.name)} <span class="small">(${item.size}, ${item.manday} build MD)</span>`;
+        left.className = 'item-left';
+
+        const dragHandle = document.createElement('span');
+        dragHandle.className = 'drag-handle';
+        dragHandle.title = 'Drag to reprioritize';
+        dragHandle.setAttribute('aria-hidden', 'true');
+
+        const leftText = document.createElement('span');
+        leftText.innerHTML = `<strong>${idx + 1}.</strong> ${escapeHtml(item.name)} <span class="small">(${item.size}, ${item.manday} build MD)</span>`;
+
+        left.appendChild(dragHandle);
+        left.appendChild(leftText);
 
         const right = document.createElement('span');
         right.className = 'metrics-wrap';
