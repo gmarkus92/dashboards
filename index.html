@@ -406,6 +406,46 @@
       flex-wrap: wrap;
     }
 
+    .timeline-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .timeline-toolbar .phase-legend {
+      margin: 0;
+    }
+
+    .view-switcher {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .view-switcher button {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 6px 10px;
+    }
+
+    .view-switcher button:hover {
+      border: 0;
+      background: #eef7f9;
+      color: #166a7a;
+    }
+
+    .view-switcher button.active {
+      background: #1f7a8c;
+      color: #fff;
+    }
+
     .phase-legend-item {
       display: inline-flex;
       gap: 6px;
@@ -523,10 +563,16 @@
     </section>
 
     <section class="panel">
-      <div class="phase-legend">
-        <span class="phase-legend-item"><span class="phase-dot" style="background: var(--analysis);"></span>Analysis</span>
-        <span class="phase-legend-item"><span class="phase-dot" style="background: var(--event);"></span>Event creation</span>
-        <span class="phase-legend-item"><span class="phase-dot" style="background: var(--build);"></span>Build</span>
+      <div class="timeline-toolbar">
+        <div class="phase-legend">
+          <span class="phase-legend-item"><span class="phase-dot" style="background: var(--analysis);"></span>Analysis</span>
+          <span class="phase-legend-item"><span class="phase-dot" style="background: var(--event);"></span>Event creation</span>
+          <span class="phase-legend-item"><span class="phase-dot" style="background: var(--build);"></span>Build</span>
+        </div>
+        <div class="view-switcher" role="group" aria-label="Timeline view switcher">
+          <button id="dayViewBtn" type="button" class="active" aria-pressed="true">Daily view</button>
+          <button id="weekViewBtn" type="button" aria-pressed="false">Weekly view</button>
+        </div>
       </div>
       <div id="timelineWrap" class="timeline-wrap"></div>
       <div class="meta" id="metaText"></div>
@@ -547,6 +593,18 @@
     const METRIC_PHASE_DONE = {
       'fixed-1': {
         all: { analysis: true }
+      },
+      'fixed-11': {
+        all: { analysis: true, event: true, build: true }
+      },
+      'fixed-12': {
+        all: { analysis: true, event: true, build: true }
+      },
+      'fixed-14': {
+        all: { analysis: true, event: true, build: true }
+      },
+      'fixed-24': {
+        all: { analysis: true, event: true, build: true }
       }
     };
 
@@ -619,19 +677,24 @@
     const onlyFirst25Input = document.getElementById('onlyFirst25');
     const itemList = document.getElementById('itemList');
     const metricsTotalLabel = document.getElementById('metricsTotalLabel');
+    const dayViewBtn = document.getElementById('dayViewBtn');
+    const weekViewBtn = document.getElementById('weekViewBtn');
     const timelineWrap = document.getElementById('timelineWrap');
     const metaText = document.getElementById('metaText');
     const burndownCanvas = document.getElementById('burndownCanvas');
 
     const metricsByItemId = {};
+    const metricPhaseDoneOverrides = {};
     const priorityByItemId = {};
     const expandedItemIds = new Set();
     const expandedTimelineItemIds = new Set();
     let draggedItemId = null;
     let burndownInteractiveState = null;
     let burndownHoverIndex = -1;
+    let timelineViewMode = 'day';
 
     loadState();
+    updateTimelineViewSwitcherUi();
     renderItems();
     renderTimeline();
 
@@ -646,8 +709,26 @@
     });
     offerBestBtn.addEventListener('click', offerBestOrder);
     resetListBtn.addEventListener('click', resetItemOrder);
+    dayViewBtn.addEventListener('click', () => setTimelineViewMode('day'));
+    weekViewBtn.addEventListener('click', () => setTimelineViewMode('week'));
     burndownCanvas.addEventListener('mousemove', onBurndownMouseMove);
     burndownCanvas.addEventListener('mouseleave', onBurndownMouseLeave);
+
+    function setTimelineViewMode(mode) {
+      const nextMode = mode === 'week' ? 'week' : 'day';
+      if (timelineViewMode === nextMode) return;
+      timelineViewMode = nextMode;
+      updateTimelineViewSwitcherUi();
+      renderTimeline();
+    }
+
+    function updateTimelineViewSwitcherUi() {
+      const isDay = timelineViewMode === 'day';
+      dayViewBtn.classList.toggle('active', isDay);
+      dayViewBtn.setAttribute('aria-pressed', isDay ? 'true' : 'false');
+      weekViewBtn.classList.toggle('active', !isDay);
+      weekViewBtn.setAttribute('aria-pressed', isDay ? 'false' : 'true');
+    }
 
     function onCapacityChange() {
       analystCountInput.value = String(Math.max(1, parseInt(analystCountInput.value, 10) || 1));
@@ -682,12 +763,13 @@
 
     function getMetricPhaseFlagsForItem(itemId, metricCount) {
       const itemMap = METRIC_PHASE_DONE[itemId] || {};
+      const overrideMap = metricPhaseDoneOverrides[itemId] || {};
       const baseRaw = itemMap.all || {};
       const baseAnalysis = !!baseRaw.analysis;
       const flags = [];
 
       for (let i = 1; i <= metricCount; i++) {
-        const raw = itemMap[i] || {};
+        const raw = { ...baseRaw, ...(itemMap[i] || {}), ...(overrideMap[i] || {}) };
         const analysis = raw.analysis !== undefined ? !!raw.analysis : baseAnalysis;
         const event = analysis && !!raw.event;
         const build = event && !!raw.build;
@@ -697,7 +779,40 @@
       return flags;
     }
 
-    function appendPhaseCheckboxGroup(container, phaseLabel, checked) {
+    function setMetricPhaseDone(itemId, metricIndex, phaseType, checked) {
+      const metricFlags = getMetricPhaseFlagsForItem(itemId, metricIndex)[metricIndex - 1] || {
+        analysis: false,
+        event: false,
+        build: false
+      };
+      const next = { ...metricFlags };
+
+      if (phaseType === 'analysis') {
+        next.analysis = !!checked;
+        if (!next.analysis) {
+          next.event = false;
+          next.build = false;
+        }
+      } else if (phaseType === 'event') {
+        next.event = !!checked;
+        if (next.event) next.analysis = true;
+        if (!next.event) next.build = false;
+      } else if (phaseType === 'build') {
+        next.build = !!checked;
+        if (next.build) {
+          next.analysis = true;
+          next.event = true;
+        }
+      }
+
+      if (!metricPhaseDoneOverrides[itemId]) metricPhaseDoneOverrides[itemId] = {};
+      metricPhaseDoneOverrides[itemId][metricIndex] = next;
+      saveState();
+      renderItems();
+      renderTimeline();
+    }
+
+    function appendPhaseCheckboxGroup(container, phaseLabel, checked, onChange = null) {
       const group = document.createElement('span');
       group.className = 'metric-phase-group';
 
@@ -708,8 +823,11 @@
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.className = 'metric-check';
-      checkbox.disabled = true;
       checkbox.checked = !!checked;
+      checkbox.disabled = typeof onChange !== 'function';
+      if (typeof onChange === 'function') {
+        checkbox.addEventListener('change', () => onChange(checkbox.checked));
+      }
 
       group.appendChild(label);
       group.appendChild(checkbox);
@@ -840,9 +958,15 @@
             metricName.textContent = `Metric ${i + 1}`;
             metricLi.appendChild(metricName);
 
-            appendPhaseCheckboxGroup(metricLi, '(A)', phaseFlags[i].analysis);
-            appendPhaseCheckboxGroup(metricLi, '(E)', phaseFlags[i].event);
-            appendPhaseCheckboxGroup(metricLi, '(B)', phaseFlags[i].build);
+            appendPhaseCheckboxGroup(metricLi, '(A)', phaseFlags[i].analysis, (nextChecked) => {
+              setMetricPhaseDone(item.id, i + 1, 'analysis', nextChecked);
+            });
+            appendPhaseCheckboxGroup(metricLi, '(E)', phaseFlags[i].event, (nextChecked) => {
+              setMetricPhaseDone(item.id, i + 1, 'event', nextChecked);
+            });
+            appendPhaseCheckboxGroup(metricLi, '(B)', phaseFlags[i].build, (nextChecked) => {
+              setMetricPhaseDone(item.id, i + 1, 'build', nextChecked);
+            });
             list.appendChild(metricLi);
           }
           detailsLi.appendChild(list);
@@ -1046,7 +1170,9 @@
       const dayCount = Math.max(1, Math.ceil(maxOffset));
       const end = addCalendarDays(start, dayCount - 1);
       const days = listDays(start, end);
-      const tinyBarThreshold = 0.08;
+      const unitDivisor = timelineViewMode === 'week' ? 7 : 1;
+      const unitCount = Math.max(1, Math.ceil(days.length / unitDivisor));
+      const tinyBarThreshold = timelineViewMode === 'week' ? 0.2 : 0.08;
 
       const first25 = scheduled.slice(0, 25);
       const milestoneOffset = first25.length > 0
@@ -1055,12 +1181,12 @@
 
       const timeline = document.createElement('div');
       timeline.className = 'timeline';
-      timeline.style.minWidth = `calc(var(--name-w) + ${days.length} * var(--cell-w))`;
+      timeline.style.minWidth = `calc(var(--name-w) + ${unitCount} * var(--cell-w))`;
 
       const headerRow = document.createElement('div');
       headerRow.className = 'header-row';
       headerRow.appendChild(makeNameCell('Roadmap'));
-      headerRow.appendChild(makeDaysRow(days, true));
+      headerRow.appendChild(makeTimeRow(start, days.length, timelineViewMode, true));
       timeline.appendChild(headerRow);
 
       scheduled.forEach((item, idx) => {
@@ -1090,7 +1216,7 @@
 
         const lane = document.createElement('div');
         lane.className = 'lane';
-        lane.appendChild(makeDaysRow(days, false));
+        lane.appendChild(makeTimeRow(start, days.length, timelineViewMode, false));
 
         if (item.duration > 0) {
           const drawablePhases = item.phases
@@ -1110,15 +1236,15 @@
             const width = phase.endOffset - phase.startOffset;
             if (width <= tinyBarThreshold) {
               const dot = document.createElement('div');
-              const center = phase.startOffset + width / 2;
+              const center = (phase.startOffset + width / 2) / unitDivisor;
               dot.className = `bar-dot phase-${phase.type}`;
               dot.style.left = `calc(${center} * var(--cell-w))`;
               lane.appendChild(dot);
             } else {
               const bar = document.createElement('div');
               bar.className = `bar phase-${phase.type}`;
-              bar.style.left = `calc(${phase.startOffset} * var(--cell-w))`;
-              bar.style.width = `calc(${width} * var(--cell-w))`;
+              bar.style.left = `calc(${phase.startOffset / unitDivisor} * var(--cell-w))`;
+              bar.style.width = `calc(${width / unitDivisor} * var(--cell-w))`;
               if (i === longestIndex) {
                 bar.textContent = `M:${item.metrics} | A:${formatDuration(item.analysisDays)}d E:${formatDuration(item.eventDays)}d B:${formatDuration(item.buildDays)}d`;
               }
@@ -1140,14 +1266,20 @@
             const metricTitle = document.createElement('span');
             metricTitle.textContent = `Metric ${metric.index}`;
             metricNameCell.appendChild(metricTitle);
-            appendPhaseCheckboxGroup(metricNameCell, '(A)', metric.phaseDone.analysis);
-            appendPhaseCheckboxGroup(metricNameCell, '(E)', metric.phaseDone.event);
-            appendPhaseCheckboxGroup(metricNameCell, '(B)', metric.phaseDone.build);
+            appendPhaseCheckboxGroup(metricNameCell, '(A)', metric.phaseDone.analysis, (nextChecked) => {
+              setMetricPhaseDone(item.id, metric.index, 'analysis', nextChecked);
+            });
+            appendPhaseCheckboxGroup(metricNameCell, '(E)', metric.phaseDone.event, (nextChecked) => {
+              setMetricPhaseDone(item.id, metric.index, 'event', nextChecked);
+            });
+            appendPhaseCheckboxGroup(metricNameCell, '(B)', metric.phaseDone.build, (nextChecked) => {
+              setMetricPhaseDone(item.id, metric.index, 'build', nextChecked);
+            });
             metricRow.appendChild(metricNameCell);
 
             const metricLane = document.createElement('div');
             metricLane.className = 'lane';
-            metricLane.appendChild(makeDaysRow(days, false));
+            metricLane.appendChild(makeTimeRow(start, days.length, timelineViewMode, false));
 
             metric.phases
               .filter((phase) => phase.endOffset > phase.startOffset)
@@ -1155,15 +1287,15 @@
                 const width = phase.endOffset - phase.startOffset;
                 if (width <= tinyBarThreshold) {
                   const dot = document.createElement('div');
-                  const center = phase.startOffset + width / 2;
+                  const center = (phase.startOffset + width / 2) / unitDivisor;
                   dot.className = `bar-dot phase-${phase.type}`;
                   dot.style.left = `calc(${center} * var(--cell-w))`;
                   metricLane.appendChild(dot);
                 } else {
                   const bar = document.createElement('div');
                   bar.className = `bar phase-${phase.type}`;
-                  bar.style.left = `calc(${phase.startOffset} * var(--cell-w))`;
-                  bar.style.width = `calc(${width} * var(--cell-w))`;
+                  bar.style.left = `calc(${phase.startOffset / unitDivisor} * var(--cell-w))`;
+                  bar.style.width = `calc(${width / unitDivisor} * var(--cell-w))`;
                   metricLane.appendChild(bar);
                 }
               });
@@ -1177,7 +1309,7 @@
       if (first25.length > 0) {
         const milestone = document.createElement('div');
         milestone.className = 'milestone-line';
-        milestone.style.left = `calc(var(--name-w) + ${milestoneOffset} * var(--cell-w))`;
+        milestone.style.left = `calc(var(--name-w) + ${milestoneOffset / unitDivisor} * var(--cell-w))`;
 
         const milestoneLabel = document.createElement('div');
         milestoneLabel.className = 'milestone-label';
@@ -1186,7 +1318,7 @@
         timeline.appendChild(milestone);
       }
 
-      const todayOffset = Math.max(0, Math.min(days.length, dayDiff(start, today) + dayFraction));
+      const todayOffset = Math.max(0, Math.min(unitCount, (dayDiff(start, today) + dayFraction) / unitDivisor));
       const todayLine = document.createElement('div');
       todayLine.className = 'today-line';
       todayLine.style.left = `calc(var(--name-w) + ${todayOffset} * var(--cell-w))`;
@@ -1199,7 +1331,8 @@
       timelineWrap.appendChild(timeline);
 
       const totalPersonDays = scheduled.reduce((sum, item) => sum + item.totalEffortPersonDays, 0);
-      metaText.textContent = `Range: ${formatDate(start)} - ${formatDate(end)} | Items: ${FIXED_ITEMS.length} | Analysts: ${analystCount} | Event creators: ${eventCreatorCount} | Build devs: ${developerCount} | Total effort: ${formatDuration(totalPersonDays)} person-days`;
+      const viewLabel = timelineViewMode === 'week' ? 'Weekly' : 'Daily';
+      metaText.textContent = `Range: ${formatDate(start)} - ${formatDate(end)} | View: ${viewLabel} | Items: ${FIXED_ITEMS.length} | Analysts: ${analystCount} | Event creators: ${eventCreatorCount} | Build devs: ${developerCount} | Total effort: ${formatDuration(totalPersonDays)} person-days`;
 
       renderBurndownChart(start, end, scheduled, milestoneOffset);
     }
@@ -1723,21 +1856,30 @@
       return el;
     }
 
-    function makeDaysRow(days, withLabels) {
+    function makeTimeRow(startDate, totalDays, mode, withLabels) {
       const row = document.createElement('div');
       row.className = 'days';
-      row.style.width = `calc(${days.length} * var(--cell-w))`;
+      const divisor = mode === 'week' ? 7 : 1;
+      const count = Math.max(1, Math.ceil(totalDays / divisor));
+      row.style.width = `calc(${count} * var(--cell-w))`;
 
-      days.forEach((d, i) => {
+      for (let i = 0; i < count; i++) {
+        const d = addCalendarDays(startDate, i * divisor);
         const cell = document.createElement('div');
-        cell.className = 'day-cell' + (isWeekend(d) ? ' weekend' : '');
+        const isWeekendCell = mode === 'day' && isWeekend(d);
+        cell.className = 'day-cell' + (isWeekendCell ? ' weekend' : '');
         cell.style.left = `calc(${i} * var(--cell-w))`;
         if (withLabels) {
-          const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
-          cell.textContent = `${d.getMonth() + 1}/${d.getDate()} ${wd}`;
+          if (mode === 'week') {
+            const endDate = addCalendarDays(d, 6);
+            cell.textContent = `${d.getMonth() + 1}/${d.getDate()}-${endDate.getMonth() + 1}/${endDate.getDate()}`;
+          } else {
+            const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+            cell.textContent = `${d.getMonth() + 1}/${d.getDate()} ${wd}`;
+          }
         }
         row.appendChild(cell);
-      });
+      }
 
       return row;
     }
@@ -1870,4 +2012,3 @@
   </script>
 </body>
 </html>
-
