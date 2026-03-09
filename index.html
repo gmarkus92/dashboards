@@ -545,6 +545,9 @@
     // Example:
     // 'fixed-1': { 1: { analysis: true, event: true, build: false } }
     const METRIC_PHASE_DONE = {
+      'fixed-1': {
+        all: { analysis: true }
+      }
     };
 
     const SIZE_TO_MANDAY = {
@@ -675,11 +678,13 @@
 
     function getMetricPhaseFlagsForItem(itemId, metricCount) {
       const itemMap = METRIC_PHASE_DONE[itemId] || {};
+      const baseRaw = itemMap.all || {};
+      const baseAnalysis = !!baseRaw.analysis;
       const flags = [];
 
       for (let i = 1; i <= metricCount; i++) {
         const raw = itemMap[i] || {};
-        const analysis = !!raw.analysis;
+        const analysis = raw.analysis !== undefined ? !!raw.analysis : baseAnalysis;
         const event = analysis && !!raw.event;
         const build = event && !!raw.build;
         flags.push({ analysis, event, build });
@@ -1008,7 +1013,31 @@
       }
 
       const start = moveToWorkingDay(rawStart);
-      const scheduled = scheduleItemsSequentially(FIXED_ITEMS, metricsByItemId, analystCount, eventCreatorCount, developerCount, start);
+      const now = new Date();
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const today = stripTime(now);
+      const dayFraction = Math.max(0, Math.min(1, (now.getTime() - today.getTime()) / msPerDay));
+      const nowOffset = Math.max(0, dayDiff(start, today) + dayFraction);
+
+      const baselineScheduled = scheduleItemsSequentially(
+        FIXED_ITEMS,
+        metricsByItemId,
+        analystCount,
+        eventCreatorCount,
+        developerCount,
+        start,
+        { ignoreDone: true }
+      );
+      const effectiveDoneMap = buildEffectiveDoneMapFromBaseline(baselineScheduled, nowOffset);
+      const scheduled = scheduleItemsSequentially(
+        FIXED_ITEMS,
+        metricsByItemId,
+        analystCount,
+        eventCreatorCount,
+        developerCount,
+        start,
+        { effectiveDoneMap }
+      );
       const maxOffset = scheduled.reduce((max, item) => Math.max(max, item.endOffset), 0);
       const dayCount = Math.max(1, Math.ceil(maxOffset));
       const end = addCalendarDays(start, dayCount - 1);
@@ -1061,8 +1090,7 @@
 
         if (item.duration > 0) {
           const drawablePhases = item.phases
-            .filter((phase) => phase.endOffset > phase.startOffset)
-            .filter((phase) => !(item.remainingMetrics === 0 && phase.type === 'build'));
+            .filter((phase) => phase.endOffset > phase.startOffset);
           let longestIndex = -1;
           let longestWidth = -1;
 
@@ -1154,10 +1182,6 @@
         timeline.appendChild(milestone);
       }
 
-      const now = new Date();
-      const msPerDay = 24 * 60 * 60 * 1000;
-      const today = stripTime(now);
-      const dayFraction = Math.max(0, Math.min(1, (now.getTime() - today.getTime()) / msPerDay));
       const todayOffset = Math.max(0, Math.min(days.length, dayDiff(start, today) + dayFraction));
       const todayLine = document.createElement('div');
       todayLine.className = 'today-line';
@@ -1176,7 +1200,33 @@
       renderBurndownChart(start, end, scheduled, milestoneOffset);
     }
 
-    function scheduleItemsSequentially(items, metricsMap, analystCount, eventCreatorCount, developerCount, startDate) {
+    function buildEffectiveDoneMapFromBaseline(baselineScheduled, nowOffset) {
+      const out = {};
+
+      baselineScheduled.forEach((item) => {
+        const perMetric = {};
+
+        (item.metricSchedules || []).forEach((metric) => {
+          const phaseEndOffset = { analysis: null, event: null, build: null };
+          (metric.phases || []).forEach((phase) => {
+            if (phase.type in phaseEndOffset) phaseEndOffset[phase.type] = phase.endOffset;
+          });
+
+          const raw = metric.phaseDone || {};
+          const analysis = !!raw.analysis && Number.isFinite(phaseEndOffset.analysis) && phaseEndOffset.analysis > nowOffset + 1e-9;
+          const event = analysis && !!raw.event && Number.isFinite(phaseEndOffset.event) && phaseEndOffset.event > nowOffset + 1e-9;
+          const build = event && !!raw.build && Number.isFinite(phaseEndOffset.build) && phaseEndOffset.build > nowOffset + 1e-9;
+
+          perMetric[metric.index] = { analysis, event, build };
+        });
+
+        out[item.id] = perMetric;
+      });
+
+      return out;
+    }
+
+    function scheduleItemsSequentially(items, metricsMap, analystCount, eventCreatorCount, developerCount, startDate, options = {}) {
       const out = [];
       const baseStart = cloneDate(startDate);
       const readyCursor = createCursor(moveToWorkingDay(baseStart), 0);
@@ -1188,19 +1238,34 @@
 
       items.forEach((item) => {
         const metrics = Math.max(0, Number(metricsMap[item.id]) || 0);
-        const phaseFlags = getMetricPhaseFlagsForItem(item.id, metrics);
-        const remainingAnalysisCount = phaseFlags.reduce((sum, f) => sum + (f.analysis ? 0 : 1), 0);
-        const remainingEventCount = phaseFlags.reduce((sum, f) => sum + (f.event ? 0 : 1), 0);
-        const remainingBuildCount = phaseFlags.reduce((sum, f) => sum + (f.build ? 0 : 1), 0);
+        const rawPhaseFlags = getMetricPhaseFlagsForItem(item.id, metrics);
+        const effectivePhaseFlags = rawPhaseFlags.map((raw, metricIndex) => {
+          if (options.ignoreDone) return { analysis: false, event: false, build: false };
 
-        const analysisPerMetric = remainingAnalysisCount === 0 ? 0 : 1 / (analystCount * 12);
-        const eventPerMetric = remainingEventCount === 0 ? 0 : 1 / (eventCreatorCount * 12);
-        const buildPerMetric = remainingBuildCount === 0 || item.manday === 0 ? 0 : (item.manday / developerCount) / remainingBuildCount;
+          const fromMap =
+            options.effectiveDoneMap &&
+            options.effectiveDoneMap[item.id] &&
+            options.effectiveDoneMap[item.id][metricIndex + 1];
+          const source = fromMap || raw || {};
+          const analysis = !!source.analysis;
+          const event = analysis && !!source.event;
+          const build = event && !!source.build;
+          return { analysis, event, build };
+        });
+
+        const remainingAnalysisCount = effectivePhaseFlags.reduce((sum, f) => sum + (f.analysis ? 0 : 1), 0);
+        const remainingEventCount = effectivePhaseFlags.reduce((sum, f) => sum + (f.event ? 0 : 1), 0);
+        const remainingBuildCount = effectivePhaseFlags.reduce((sum, f) => sum + (f.build ? 0 : 1), 0);
+
+        const analysisPerMetric = metrics === 0 ? 0 : 1 / (analystCount * 12);
+        const eventPerMetric = metrics === 0 ? 0 : 1 / (eventCreatorCount * 12);
+        const buildPerMetric = metrics === 0 || item.manday === 0 ? 0 : (item.manday / developerCount) / metrics;
 
         const metricSchedules = [];
 
         for (let i = 0; i < metrics; i++) {
-          const flags = phaseFlags[i];
+          const rawFlags = rawPhaseFlags[i] || { analysis: false, event: false, build: false };
+          const effectiveFlags = effectivePhaseFlags[i] || { analysis: false, event: false, build: false };
           const metricPhases = [];
           let analysisStart = cloneCursor(readyCursor);
           let analysisEnd = cloneCursor(readyCursor);
@@ -1209,51 +1274,55 @@
           let buildStart = cloneCursor(readyCursor);
           let buildEnd = cloneCursor(readyCursor);
 
-          if (!flags.analysis) {
+          const metricAnalysisDays = effectiveFlags.analysis ? 0 : analysisPerMetric;
+          const metricEventDays = effectiveFlags.event ? 0 : eventPerMetric;
+          const metricBuildDays = effectiveFlags.build ? 0 : buildPerMetric;
+
+          if (metricAnalysisDays > 0) {
             analysisStart = cloneCursor(analystCursor);
-            analysisEnd = schedulePhase(metricPhases, analysisStart, analysisPerMetric, 'analysis', analystCount, baseStart);
-            if (analysisPerMetric > 0) analystCursor = cloneCursor(analysisEnd);
+            analysisEnd = schedulePhase(metricPhases, analysisStart, metricAnalysisDays, 'analysis', analystCount, baseStart);
+            analystCursor = cloneCursor(analysisEnd);
           }
 
-          if (!flags.event) {
-            const prereq = flags.analysis ? readyCursor : analysisEnd;
+          if (metricEventDays > 0) {
+            const prereq = metricAnalysisDays > 0 ? analysisEnd : readyCursor;
             eventStart = laterCursor(eventCursor, prereq);
-            eventEnd = schedulePhase(metricPhases, eventStart, eventPerMetric, 'event', eventCreatorCount, baseStart);
-            if (eventPerMetric > 0) eventCursor = cloneCursor(eventEnd);
+            eventEnd = schedulePhase(metricPhases, eventStart, metricEventDays, 'event', eventCreatorCount, baseStart);
+            eventCursor = cloneCursor(eventEnd);
           }
 
-          if (!flags.build) {
-            const prereq = flags.event ? readyCursor : eventEnd;
+          if (metricBuildDays > 0) {
+            const prereq = metricEventDays > 0 ? eventEnd : readyCursor;
             buildStart = laterCursor(buildCursor, prereq);
-            buildEnd = schedulePhase(metricPhases, buildStart, buildPerMetric, 'build', developerCount, baseStart);
-            if (buildPerMetric > 0) buildCursor = cloneCursor(buildEnd);
+            buildEnd = schedulePhase(metricPhases, buildStart, metricBuildDays, 'build', developerCount, baseStart);
+            buildCursor = cloneCursor(buildEnd);
           }
 
           const metricStartCursor = firstActiveCursor(
             analysisStart,
             eventStart,
             buildStart,
-            flags.analysis ? 0 : analysisPerMetric,
-            flags.event ? 0 : eventPerMetric,
-            flags.build ? 0 : buildPerMetric
+            metricAnalysisDays,
+            metricEventDays,
+            metricBuildDays
           );
           const metricEndCursor = lastActiveCursor(
             analysisEnd,
             eventEnd,
             buildEnd,
-            flags.analysis ? 0 : analysisPerMetric,
-            flags.event ? 0 : eventPerMetric,
-            flags.build ? 0 : buildPerMetric,
+            metricAnalysisDays,
+            metricEventDays,
+            metricBuildDays,
             metricStartCursor
           );
-          const metricBuildCompletionCursor = !flags.build && buildPerMetric > 0 ? buildEnd : metricEndCursor;
+          const metricBuildCompletionCursor = metricBuildDays > 0 ? buildEnd : metricEndCursor;
 
           metricSchedules.push({
             index: i + 1,
-            phaseDone: flags,
+            phaseDone: rawFlags,
             startOffset: cursorToCalendarOffset(baseStart, metricStartCursor),
             endOffset: cursorToCalendarOffset(baseStart, metricEndCursor),
-            buildCompletionOffset: flags.build ? 0 : cursorToCalendarOffset(baseStart, metricBuildCompletionCursor),
+            buildCompletionOffset: cursorToCalendarOffset(baseStart, metricBuildCompletionCursor),
             phases: metricPhases
           });
         }
