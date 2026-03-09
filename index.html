@@ -628,6 +628,8 @@
     const expandedItemIds = new Set();
     const expandedTimelineItemIds = new Set();
     let draggedItemId = null;
+    let burndownInteractiveState = null;
+    let burndownHoverIndex = -1;
 
     loadState();
     renderItems();
@@ -644,6 +646,8 @@
     });
     offerBestBtn.addEventListener('click', offerBestOrder);
     resetListBtn.addEventListener('click', resetItemOrder);
+    burndownCanvas.addEventListener('mousemove', onBurndownMouseMove);
+    burndownCanvas.addEventListener('mouseleave', onBurndownMouseLeave);
 
     function onCapacityChange() {
       analystCountInput.value = String(Math.max(1, parseInt(analystCountInput.value, 10) || 1));
@@ -1461,6 +1465,37 @@
       return cloneCursor(fallback);
     }
 
+    function onBurndownMouseMove(event) {
+      if (!burndownInteractiveState) return;
+      const rect = burndownCanvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const { pad, cellW, count } = burndownInteractiveState;
+      if (!Number.isFinite(cellW) || cellW <= 0 || count <= 0) return;
+      const chartRight = pad.left + cellW * count;
+      const chartBottom = burndownInteractiveState.pad.top + burndownInteractiveState.chartH;
+
+      if (x < pad.left || x > chartRight || y < pad.top || y > chartBottom) {
+        onBurndownMouseLeave();
+        return;
+      }
+
+      const rawIndex = Math.floor((x - pad.left) / cellW);
+      const nextHover = Math.max(0, Math.min(count - 1, rawIndex));
+      if (nextHover === burndownHoverIndex) return;
+
+      burndownHoverIndex = nextHover;
+      drawBurndownChart(burndownInteractiveState, burndownHoverIndex);
+    }
+
+    function onBurndownMouseLeave() {
+      if (burndownHoverIndex === -1) return;
+      burndownHoverIndex = -1;
+      if (burndownInteractiveState) drawBurndownChart(burndownInteractiveState, -1);
+    }
+
     function renderBurndownChart(start, end, scheduled, milestoneOffset) {
       const ctx = burndownCanvas.getContext('2d');
       if (!ctx) return;
@@ -1475,15 +1510,42 @@
       const width = Math.max(parentWidth - 4, 80 + count * 56);
       const height = 220;
       const dpr = window.devicePixelRatio || 1;
+      const pad = { left: 48, right: 16, top: 14, bottom: 48 };
+      const chartW = width - pad.left - pad.right;
+      const chartH = height - pad.top - pad.bottom;
+      const cellW = chartW / count;
+
+      burndownInteractiveState = {
+        series,
+        total,
+        maxY,
+        count,
+        width,
+        height,
+        dpr,
+        pad,
+        chartW,
+        chartH,
+        cellW,
+        milestoneOffset
+      };
+
+      if (burndownHoverIndex >= count) burndownHoverIndex = -1;
+      drawBurndownChart(burndownInteractiveState, burndownHoverIndex);
+    }
+
+    function drawBurndownChart(state, hoverIndex) {
+      const ctx = burndownCanvas.getContext('2d');
+      if (!ctx || !state) return;
+
+      const { series, total, maxY, count, width, height, dpr, pad, chartW, chartH, cellW, milestoneOffset } = state;
+      const yFor = (remaining) => pad.top + chartH - (remaining / maxY) * chartH;
+
       burndownCanvas.width = Math.floor(width * dpr);
       burndownCanvas.height = Math.floor(height * dpr);
       burndownCanvas.style.width = `${width}px`;
       burndownCanvas.style.height = `${height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-      const pad = { left: 48, right: 16, top: 14, bottom: 48 };
-      const chartW = width - pad.left - pad.right;
-      const chartH = height - pad.top - pad.bottom;
 
       ctx.clearRect(0, 0, width, height);
       ctx.strokeStyle = '#d7dde4';
@@ -1503,9 +1565,6 @@
         ctx.font = '12px Segoe UI';
         ctx.fillText(String(value), 10, y + 4);
       }
-
-      const cellW = chartW / count;
-      const yFor = (remaining) => pad.top + chartH - (remaining / maxY) * chartH;
 
       ctx.fillStyle = 'rgba(95, 108, 123, 0.10)';
       for (let i = 0; i < count; i++) {
@@ -1557,6 +1616,38 @@
         ctx.fillText('First 25 build done', mx + 4, pad.top + 12);
       }
 
+      if (hoverIndex >= 0 && hoverIndex < count) {
+        const point = series[hoverIndex];
+        const x = pad.left + (hoverIndex + 1) * cellW;
+        const y = yFor(point.remainingEnd);
+
+        ctx.strokeStyle = 'rgba(31, 122, 140, 0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, pad.top);
+        ctx.lineTo(x, pad.top + chartH);
+        ctx.stroke();
+
+        ctx.fillStyle = '#1f7a8c';
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        const tooltip = `${point.label}: ${point.remainingEnd}`;
+        ctx.font = '12px Segoe UI';
+        const textW = ctx.measureText(tooltip).width;
+        const boxW = textW + 12;
+        const boxH = 22;
+        const preferredX = x + 8;
+        const tx = Math.min(width - boxW - 6, Math.max(6, preferredX));
+        const ty = Math.max(6, y - boxH - 8);
+
+        ctx.fillStyle = 'rgba(17, 24, 39, 0.92)';
+        ctx.fillRect(tx, ty, boxW, boxH);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(tooltip, tx + 6, ty + 15);
+      }
+
       ctx.fillStyle = '#5f6c7b';
       ctx.font = '12px Segoe UI';
       for (let i = 0; i < count; i++) {
@@ -1571,6 +1662,8 @@
     }
 
     function clearBurndownChart(text) {
+      burndownInteractiveState = null;
+      burndownHoverIndex = -1;
       const ctx = burndownCanvas.getContext('2d');
       if (!ctx) return;
       const width = Math.max(500, (burndownCanvas.parentElement ? burndownCanvas.parentElement.clientWidth : 900) - 4);
