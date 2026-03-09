@@ -286,6 +286,24 @@
       padding-left: 20px;
     }
 
+    .metric-done-label {
+      opacity: 0.75;
+      text-decoration: line-through;
+    }
+
+    .metric-check {
+      width: auto;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    .metric-phase-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      margin-left: 8px;
+    }
+
     .timeline-wrap {
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -425,6 +443,30 @@
       white-space: nowrap;
     }
 
+    .today-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #111827;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .today-label {
+      position: absolute;
+      top: 18px;
+      left: 4px;
+      color: #111827;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.92);
+      padding: 0 4px;
+      border-radius: 4px;
+      white-space: nowrap;
+      z-index: 0;
+    }
+
     .meta { margin-top: 10px; font-size: 12px; color: var(--muted); }
     .chart-title { margin: 14px 0 8px; font-size: 12px; font-weight: 600; }
 
@@ -497,7 +539,13 @@
 
   <script>
     const STORAGE_KEY = 'roadmap_observability_v4';
+    const FIXED_START_DATE = '2026-03-09';
     const PRIORITY_LEVELS = ['Highest', 'High', 'Medium', 'Low'];
+    // Per metric phase completion (1-based metric indexes); edit manually when needed.
+    // Example:
+    // 'fixed-1': { 1: { analysis: true, event: true, build: false } }
+    const METRIC_PHASE_DONE = {
+    };
 
     const SIZE_TO_MANDAY = {
       S: 3,
@@ -587,6 +635,7 @@
     developerCountInput.addEventListener('change', onCapacityChange);
 
     startDateInput.addEventListener('change', () => {
+      startDateInput.value = FIXED_START_DATE;
       saveState();
       renderTimeline();
     });
@@ -602,8 +651,8 @@
     }
 
     function loadState() {
-      const fallback = formatDateInput(new Date());
-      startDateInput.value = fallback;
+      startDateInput.value = FIXED_START_DATE;
+      startDateInput.disabled = true;
       analystCountInput.value = '3';
       eventCreatorCountInput.value = '20';
       developerCountInput.value = '4';
@@ -622,6 +671,40 @@
     function getDefaultMetricsForIndex(index) {
       const v = Number(DEFAULT_METRICS[index]);
       return Number.isFinite(v) && v >= 0 ? v : 0;
+    }
+
+    function getMetricPhaseFlagsForItem(itemId, metricCount) {
+      const itemMap = METRIC_PHASE_DONE[itemId] || {};
+      const flags = [];
+
+      for (let i = 1; i <= metricCount; i++) {
+        const raw = itemMap[i] || {};
+        const analysis = !!raw.analysis;
+        const event = analysis && !!raw.event;
+        const build = event && !!raw.build;
+        flags.push({ analysis, event, build });
+      }
+
+      return flags;
+    }
+
+    function appendPhaseCheckboxGroup(container, phaseLabel, checked) {
+      const group = document.createElement('span');
+      group.className = 'metric-phase-group';
+
+      const label = document.createElement('span');
+      label.textContent = phaseLabel;
+      if (checked) label.className = 'metric-done-label';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'metric-check';
+      checkbox.disabled = true;
+      checkbox.checked = !!checked;
+
+      group.appendChild(label);
+      group.appendChild(checkbox);
+      container.appendChild(group);
     }
 
     function saveState() {
@@ -733,6 +816,7 @@
         if (expandedItemIds.has(item.id)) {
           const detailsLi = document.createElement('li');
           detailsLi.className = 'metrics-detail-row';
+          const phaseFlags = getMetricPhaseFlagsForItem(item.id, metricCount);
 
           const title = document.createElement('div');
           title.className = 'metrics-detail-title';
@@ -743,7 +827,13 @@
           list.className = 'metrics-detail-list';
           for (let i = 0; i < metricCount; i++) {
             const metricLi = document.createElement('li');
-            metricLi.textContent = `Metric ${i + 1}`;
+            const metricName = document.createElement('span');
+            metricName.textContent = `Metric ${i + 1}`;
+            metricLi.appendChild(metricName);
+
+            appendPhaseCheckboxGroup(metricLi, '(A)', phaseFlags[i].analysis);
+            appendPhaseCheckboxGroup(metricLi, '(E)', phaseFlags[i].event);
+            appendPhaseCheckboxGroup(metricLi, '(B)', phaseFlags[i].build);
             list.appendChild(metricLi);
           }
           detailsLi.appendChild(list);
@@ -972,7 +1062,7 @@
         if (item.duration > 0) {
           const drawablePhases = item.phases
             .filter((phase) => phase.endOffset > phase.startOffset)
-            .filter((phase) => !(item.metrics === 0 && phase.type === 'build'));
+            .filter((phase) => !(item.remainingMetrics === 0 && phase.type === 'build'));
           let longestIndex = -1;
           let longestWidth = -1;
 
@@ -1013,8 +1103,14 @@
             const metricRow = document.createElement('div');
             metricRow.className = 'roadmap-row';
 
-            const metricNameCell = makeNameCell(`Metric ${metric.index}`);
+            const metricNameCell = makeNameCell('');
             metricNameCell.classList.add('metric-name-cell');
+            const metricTitle = document.createElement('span');
+            metricTitle.textContent = `Metric ${metric.index}`;
+            metricNameCell.appendChild(metricTitle);
+            appendPhaseCheckboxGroup(metricNameCell, '(A)', metric.phaseDone.analysis);
+            appendPhaseCheckboxGroup(metricNameCell, '(E)', metric.phaseDone.event);
+            appendPhaseCheckboxGroup(metricNameCell, '(B)', metric.phaseDone.build);
             metricRow.appendChild(metricNameCell);
 
             const metricLane = document.createElement('div');
@@ -1058,6 +1154,20 @@
         timeline.appendChild(milestone);
       }
 
+      const now = new Date();
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const today = stripTime(now);
+      const dayFraction = Math.max(0, Math.min(1, (now.getTime() - today.getTime()) / msPerDay));
+      const todayOffset = Math.max(0, Math.min(days.length, dayDiff(start, today) + dayFraction));
+      const todayLine = document.createElement('div');
+      todayLine.className = 'today-line';
+      todayLine.style.left = `calc(var(--name-w) + ${todayOffset} * var(--cell-w))`;
+      const todayLabel = document.createElement('div');
+      todayLabel.className = 'today-label';
+      todayLabel.textContent = 'Today';
+      todayLine.appendChild(todayLabel);
+      timeline.appendChild(todayLine);
+
       timelineWrap.appendChild(timeline);
 
       const totalPersonDays = scheduled.reduce((sum, item) => sum + item.totalEffortPersonDays, 0);
@@ -1069,6 +1179,7 @@
     function scheduleItemsSequentially(items, metricsMap, analystCount, eventCreatorCount, developerCount, startDate) {
       const out = [];
       const baseStart = cloneDate(startDate);
+      const readyCursor = createCursor(moveToWorkingDay(baseStart), 0);
 
       // Pipeline cursors: each role starts next item as soon as it is free.
       let analystCursor = createCursor(moveToWorkingDay(baseStart), 0);
@@ -1077,37 +1188,72 @@
 
       items.forEach((item) => {
         const metrics = Math.max(0, Number(metricsMap[item.id]) || 0);
+        const phaseFlags = getMetricPhaseFlagsForItem(item.id, metrics);
+        const remainingAnalysisCount = phaseFlags.reduce((sum, f) => sum + (f.analysis ? 0 : 1), 0);
+        const remainingEventCount = phaseFlags.reduce((sum, f) => sum + (f.event ? 0 : 1), 0);
+        const remainingBuildCount = phaseFlags.reduce((sum, f) => sum + (f.build ? 0 : 1), 0);
 
-        const analysisPerMetric = metrics === 0 ? 0 : 1 / (analystCount * 12);
-        const eventPerMetric = metrics === 0 ? 0 : 1 / (eventCreatorCount * 12);
-        const buildPerMetric = metrics === 0 || item.manday === 0 ? 0 : (item.manday / developerCount) / metrics;
+        const analysisPerMetric = remainingAnalysisCount === 0 ? 0 : 1 / (analystCount * 12);
+        const eventPerMetric = remainingEventCount === 0 ? 0 : 1 / (eventCreatorCount * 12);
+        const buildPerMetric = remainingBuildCount === 0 || item.manday === 0 ? 0 : (item.manday / developerCount) / remainingBuildCount;
 
         const metricSchedules = [];
 
         for (let i = 0; i < metrics; i++) {
+          const flags = phaseFlags[i];
           const metricPhases = [];
+          let analysisStart = cloneCursor(readyCursor);
+          let analysisEnd = cloneCursor(readyCursor);
+          let eventStart = cloneCursor(readyCursor);
+          let eventEnd = cloneCursor(readyCursor);
+          let buildStart = cloneCursor(readyCursor);
+          let buildEnd = cloneCursor(readyCursor);
 
-          const analysisStart = cloneCursor(analystCursor);
-          const analysisEnd = schedulePhase(metricPhases, analysisStart, analysisPerMetric, 'analysis', analystCount, baseStart);
-          if (analysisPerMetric > 0) analystCursor = cloneCursor(analysisEnd);
+          if (!flags.analysis) {
+            analysisStart = cloneCursor(analystCursor);
+            analysisEnd = schedulePhase(metricPhases, analysisStart, analysisPerMetric, 'analysis', analystCount, baseStart);
+            if (analysisPerMetric > 0) analystCursor = cloneCursor(analysisEnd);
+          }
 
-          const eventStart = laterCursor(eventCursor, analysisEnd);
-          const eventEnd = schedulePhase(metricPhases, eventStart, eventPerMetric, 'event', eventCreatorCount, baseStart);
-          if (eventPerMetric > 0) eventCursor = cloneCursor(eventEnd);
+          if (!flags.event) {
+            const prereq = flags.analysis ? readyCursor : analysisEnd;
+            eventStart = laterCursor(eventCursor, prereq);
+            eventEnd = schedulePhase(metricPhases, eventStart, eventPerMetric, 'event', eventCreatorCount, baseStart);
+            if (eventPerMetric > 0) eventCursor = cloneCursor(eventEnd);
+          }
 
-          const buildStart = laterCursor(buildCursor, eventEnd);
-          const buildEnd = schedulePhase(metricPhases, buildStart, buildPerMetric, 'build', developerCount, baseStart);
-          if (buildPerMetric > 0) buildCursor = cloneCursor(buildEnd);
+          if (!flags.build) {
+            const prereq = flags.event ? readyCursor : eventEnd;
+            buildStart = laterCursor(buildCursor, prereq);
+            buildEnd = schedulePhase(metricPhases, buildStart, buildPerMetric, 'build', developerCount, baseStart);
+            if (buildPerMetric > 0) buildCursor = cloneCursor(buildEnd);
+          }
 
-          const metricStartCursor = firstActiveCursor(analysisStart, eventStart, buildStart, analysisPerMetric, eventPerMetric, buildPerMetric);
-          const metricEndCursor = lastActiveCursor(analysisEnd, eventEnd, buildEnd, analysisPerMetric, eventPerMetric, buildPerMetric, metricStartCursor);
-          const metricBuildCompletionCursor = buildPerMetric > 0 ? buildEnd : metricEndCursor;
+          const metricStartCursor = firstActiveCursor(
+            analysisStart,
+            eventStart,
+            buildStart,
+            flags.analysis ? 0 : analysisPerMetric,
+            flags.event ? 0 : eventPerMetric,
+            flags.build ? 0 : buildPerMetric
+          );
+          const metricEndCursor = lastActiveCursor(
+            analysisEnd,
+            eventEnd,
+            buildEnd,
+            flags.analysis ? 0 : analysisPerMetric,
+            flags.event ? 0 : eventPerMetric,
+            flags.build ? 0 : buildPerMetric,
+            metricStartCursor
+          );
+          const metricBuildCompletionCursor = !flags.build && buildPerMetric > 0 ? buildEnd : metricEndCursor;
 
           metricSchedules.push({
             index: i + 1,
+            phaseDone: flags,
             startOffset: cursorToCalendarOffset(baseStart, metricStartCursor),
             endOffset: cursorToCalendarOffset(baseStart, metricEndCursor),
-            buildCompletionOffset: cursorToCalendarOffset(baseStart, metricBuildCompletionCursor),
+            buildCompletionOffset: flags.build ? 0 : cursorToCalendarOffset(baseStart, metricBuildCompletionCursor),
             phases: metricPhases
           });
         }
@@ -1119,15 +1265,13 @@
           buildCursor = cloneCursor(syntheticEnd);
         }
 
-        metricSchedules.sort((a, b) => a.buildCompletionOffset - b.buildCompletionOffset || a.index - b.index);
-
         let phases = metricSchedules.length > 0
           ? buildItemPhasesFromMetricSchedules(metricSchedules, analystCount, eventCreatorCount, developerCount)
           : syntheticPhases.slice();
 
-        const analysisDays = metrics * analysisPerMetric;
-        const eventDays = metrics * eventPerMetric;
-        const buildDays = metrics * buildPerMetric + (metrics === 0 && item.manday > 0 ? item.manday / developerCount : 0);
+        const analysisDays = remainingAnalysisCount * analysisPerMetric;
+        const eventDays = remainingEventCount * eventPerMetric;
+        const buildDays = remainingBuildCount * buildPerMetric + (metrics === 0 && item.manday > 0 ? item.manday / developerCount : 0);
 
         const startOffset = phases.length > 0 ? Math.min(...phases.map((phase) => phase.startOffset)) : 0;
         const buildCompletionOffset = metricSchedules.length > 0
@@ -1139,6 +1283,10 @@
         out.push({
           ...item,
           metrics,
+          remainingMetrics: remainingBuildCount,
+          remainingAnalysisCount,
+          remainingEventCount,
+          remainingBuildCount,
           analysisDays,
           eventDays,
           buildDays,
@@ -1148,7 +1296,10 @@
           buildCompletionOffset,
           phases,
           metricSchedules,
-          totalEffortPersonDays: metrics / 12 + metrics / 12 + item.manday
+          totalEffortPersonDays:
+            remainingAnalysisCount / 12 +
+            remainingEventCount / 12 +
+            (metrics > 0 ? item.manday * (remainingBuildCount / metrics) : item.manday)
         });
       });
 
@@ -1372,7 +1523,7 @@
     function buildBurndownSeries(start, end, scheduled) {
       const days = listDays(start, end);
       const completionOffsets = scheduled
-        .filter((item) => item.metrics > 0)
+        .filter((item) => item.remainingMetrics > 0)
         .map((item) => Number(item.buildCompletionOffset) || 0);
       const points = [];
 
