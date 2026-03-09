@@ -970,7 +970,9 @@
         lane.appendChild(makeDaysRow(days, false));
 
         if (item.duration > 0) {
-          const drawablePhases = item.phases.filter((phase) => phase.endOffset > phase.startOffset);
+          const drawablePhases = item.phases
+            .filter((phase) => phase.endOffset > phase.startOffset)
+            .filter((phase) => !(item.metrics === 0 && phase.type === 'build'));
           let longestIndex = -1;
           let longestWidth = -1;
 
@@ -1369,7 +1371,9 @@
 
     function buildBurndownSeries(start, end, scheduled) {
       const days = listDays(start, end);
-      const completionOffsets = scheduled.map((item) => Number(item.buildCompletionOffset) || 0);
+      const completionOffsets = scheduled
+        .filter((item) => item.metrics > 0)
+        .map((item) => Number(item.buildCompletionOffset) || 0);
       const points = [];
 
       days.forEach((day, dayIndex) => {
