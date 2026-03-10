@@ -555,11 +555,11 @@
       <h2>Capacity</h2>
       <div class="row">
         <label for="analystCount">Analysts:</label>
-        <input id="analystCount" type="number" min="1" step="1" value="3" />
+        <input id="analystCount" type="number" min="1" step="1" value="5" />
         <label for="eventCreatorCount">Event creator devs:</label>
-        <input id="eventCreatorCount" type="number" min="1" step="1" value="20" />
+        <input id="eventCreatorCount" type="number" min="1" step="1" value="10" />
         <label for="developerCount">Build developers:</label>
-        <input id="developerCount" type="number" min="1" step="1" value="4" />
+        <input id="developerCount" type="number" min="1" step="1" value="20" />
         <label for="startDate">Start date:</label>
         <input id="startDate" type="date" />
       </div>
@@ -767,9 +767,9 @@
     function loadState() {
       startDateInput.value = FIXED_START_DATE;
       startDateInput.disabled = true;
-      analystCountInput.value = '3';
-      eventCreatorCountInput.value = '20';
-      developerCountInput.value = '4';
+      analystCountInput.value = '5';
+      eventCreatorCountInput.value = '10';
+      developerCountInput.value = '20';
       onlyFirst25Input.checked = true;
 
       FIXED_ITEMS.forEach((item, index) => {
