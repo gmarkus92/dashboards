@@ -1624,7 +1624,7 @@
       const viewLabel = timelineViewMode === 'week' ? 'Weekly' : 'Daily';
       metaText.textContent = `Range: ${formatDate(start)} - ${formatDate(end)} | View: ${viewLabel} | Items: ${FIXED_ITEMS.length} | Analysts: ${analystCount} | Event creators: ${eventCreatorCount} | Build devs: ${developerCount} | Total effort: ${formatDuration(totalPersonDays)} person-days`;
 
-      renderBurndownChart(start, end, scheduled, milestoneOffset);
+      renderBurndownChart(start, end, scheduled, milestoneOffset, milestoneFirst14Offset, nowOffset);
     }
 
     function buildEffectiveDoneMapFromBaseline(baselineScheduled, nowOffset) {
@@ -1919,7 +1919,7 @@
       if (burndownInteractiveState) drawBurndownChart(burndownInteractiveState, -1);
     }
 
-    function renderBurndownChart(start, end, scheduled, milestoneOffset) {
+    function renderBurndownChart(start, end, scheduled, milestoneOffset, milestoneFirst14Offset, todayOffset) {
       const ctx = burndownCanvas.getContext('2d');
       if (!ctx) return;
 
@@ -1950,7 +1950,9 @@
         chartW,
         chartH,
         cellW,
-        milestoneOffset
+        milestoneOffset,
+        milestoneFirst14Offset,
+        todayOffset
       };
 
       if (burndownHoverIndex >= count) burndownHoverIndex = -1;
@@ -1961,7 +1963,7 @@
       const ctx = burndownCanvas.getContext('2d');
       if (!ctx || !state) return;
 
-      const { series, total, maxY, count, width, height, dpr, pad, chartW, chartH, cellW, milestoneOffset } = state;
+      const { series, total, maxY, count, width, height, dpr, pad, chartW, chartH, cellW, milestoneOffset, milestoneFirst14Offset, todayOffset } = state;
       const yFor = (remaining) => pad.top + chartH - (remaining / maxY) * chartH;
 
       burndownCanvas.width = Math.floor(width * dpr);
@@ -2023,6 +2025,36 @@
         ctx.lineTo(x, yFor(p.remainingEnd));
       });
       ctx.stroke();
+
+      if (Number.isFinite(todayOffset)) {
+        const clampedToday = Math.max(0, Math.min(count, todayOffset));
+        const tx = pad.left + clampedToday * cellW;
+        ctx.strokeStyle = '#111827';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(tx, pad.top);
+        ctx.lineTo(tx, pad.top + chartH);
+        ctx.stroke();
+
+        ctx.fillStyle = '#111827';
+        ctx.font = '12px Segoe UI';
+        ctx.fillText('Today', tx + 4, pad.top + 12);
+      }
+
+      if (Number.isFinite(milestoneFirst14Offset)) {
+        const clamped14 = Math.max(0, Math.min(count, milestoneFirst14Offset));
+        const ox = pad.left + clamped14 * cellW;
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(ox, pad.top);
+        ctx.lineTo(ox, pad.top + chartH);
+        ctx.stroke();
+
+        ctx.fillStyle = '#b45309';
+        ctx.font = '12px Segoe UI';
+        ctx.fillText('First 14 done (Highest + High Top)', ox + 4, pad.top + 24);
+      }
 
       if (Number.isFinite(milestoneOffset)) {
         const clamped = Math.max(0, Math.min(count, milestoneOffset));
