@@ -703,8 +703,8 @@
 
     const FIXED_ITEMS = [
       { name: 'Login & Registration Journey Performance Dashboards', size: 'XL' },
-      { name: 'Health & Check Performance Dashboard', size: 'XXXL' },
       { name: 'Interactive Landing Page', size: 'M', mandayOverride: 0 },
+      { name: 'Health & Check Performance Dashboard', size: 'XXXL' },
       { name: 'OneApp Push vs Pull (Login + SCA Counts)', size: 'S' },
       { name: 'BBA-specific technical dashboards', size: 'M' },
       { name: 'Crash Dashboard', size: 'M' },
@@ -991,6 +991,28 @@
     }
 
     function getDefaultMetricsForIndex(index) {
+      if (index === 23) return 21;
+      if (index === 22) return 245;
+      if (index === 21) return 69;
+      if (index === 20) return 8;
+      if (index === 19) return 4;
+      if (index === 18) return 7;
+      if (index === 17) return 9;
+      if (index === 16) return 8;
+      if (index === 15) return 74;
+      if (index === 14) return 16;
+      if (index === 13) return 0;
+      if (index === 12) return 77;
+      if (index === 11) return 0;
+      if (index === 10) return 0;
+      if (index === 9) return 87;
+      if (index === 8) return 251;
+      if (index === 7) return 7;
+      if (index === 1) return 0;
+      if (index === 2) return 74;
+      if (index === 6) return 24;
+      if (index === 5) return 6;
+      if (index === 24) return 29;
       if (index === 25) return 264;
       if (index === 26) return 77;
       if (index === 27) return 18;
@@ -2140,15 +2162,14 @@
     function buildBurndownSeries(start, end, scheduled) {
       const days = listDays(start, end);
       const completionOffsets = scheduled
-        .filter((item) => item.remainingMetrics > 0)
         .map((item) => Number(item.buildCompletionOffset) || 0);
       const points = [];
 
       days.forEach((day, dayIndex) => {
         const dayStart = dayIndex;
         const dayEnd = dayIndex + 1;
-        const remainingStartOfDay = completionOffsets.filter((offset) => offset > dayStart + 1e-9).length;
-        const remainingEndOfDay = completionOffsets.filter((offset) => offset > dayEnd + 1e-9).length;
+        const remainingStartOfDay = completionOffsets.filter((offset) => offset >= dayStart - 1e-9).length;
+        const remainingEndOfDay = completionOffsets.filter((offset) => offset >= dayEnd - 1e-9).length;
 
         if (isWeekend(day)) {
           points.push({
