@@ -372,6 +372,20 @@
       white-space: nowrap;
     }
 
+    .day-cell.two-line-label {
+      white-space: normal;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 1px;
+      line-height: 1.1;
+    }
+
+    .day-cell .day-secondary {
+      font-size: 11px;
+      opacity: 0.9;
+    }
+
     .day-cell.weekend { background: var(--weekend); }
 
     .lane { position: relative; height: var(--row-h); }
@@ -514,28 +528,31 @@
       bottom: 0;
       width: 2px;
       background: #d62828;
-      z-index: 4;
+      z-index: 7;
       pointer-events: none;
     }
 
     .milestone-label {
       position: absolute;
-      top: 2px;
-      left: 4px;
+      top: 8px;
+      left: 6px;
+      transform: rotate(90deg);
+      transform-origin: left top;
       color: #d62828;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
-      background: rgba(255, 255, 255, 0.92);
-      padding: 0 4px;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 0 3px;
       border-radius: 4px;
       white-space: nowrap;
+      z-index: 8;
     }
 
-    .milestone-line.first-15 {
+    .milestone-line.first-14 {
       background: #f59e0b;
     }
 
-    .milestone-line.first-15 .milestone-label {
+    .milestone-line.first-14 .milestone-label {
       color: #b45309;
     }
 
@@ -545,22 +562,24 @@
       bottom: 0;
       width: 2px;
       background: #111827;
-      z-index: 0;
+      z-index: 7;
       pointer-events: none;
     }
 
     .today-label {
       position: absolute;
-      top: 18px;
-      left: 4px;
+      top: 8px;
+      left: 6px;
+      transform: rotate(90deg);
+      transform-origin: left top;
       color: #111827;
       font-size: 11px;
       font-weight: 600;
-      background: rgba(255, 255, 255, 0.92);
-      padding: 0 4px;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 0 3px;
       border-radius: 4px;
       white-space: nowrap;
-      z-index: 0;
+      z-index: 8;
     }
 
     .meta { margin-top: 10px; font-size: 12px; color: var(--muted); }
@@ -1422,9 +1441,9 @@
       }
 
       const first25 = scheduled.slice(0, 25);
-      const first15 = scheduled.slice(0, 15);
-      const milestoneFirst15Offset = first15.length > 0
-        ? first15.reduce((max, item) => Math.max(max, item.buildCompletionOffset), 0)
+      const first14 = scheduled.slice(0, 14);
+      const milestoneFirst14Offset = first14.length > 0
+        ? first14.reduce((max, item) => Math.max(max, item.buildCompletionOffset), 0)
         : 0;
       const milestoneOffset = first25.length > 0
         ? first25.reduce((max, item) => Math.max(max, item.buildCompletionOffset), 0)
@@ -1565,16 +1584,16 @@
         }
       });
 
-      if (first15.length > 0) {
-        const milestone15 = document.createElement('div');
-        milestone15.className = 'milestone-line first-15';
-        milestone15.style.left = `calc(var(--name-w) + ${milestoneFirst15Offset / unitDivisor} * var(--cell-w))`;
+      if (first14.length > 0) {
+        const milestone14 = document.createElement('div');
+        milestone14.className = 'milestone-line first-14';
+        milestone14.style.left = `calc(var(--name-w) + ${milestoneFirst14Offset / unitDivisor} * var(--cell-w))`;
 
-        const milestone15Label = document.createElement('div');
-        milestone15Label.className = 'milestone-label';
-        milestone15Label.textContent = 'First 15 build done';
-        milestone15.appendChild(milestone15Label);
-        timeline.appendChild(milestone15);
+        const milestone14Label = document.createElement('div');
+        milestone14Label.className = 'milestone-label';
+        milestone14Label.textContent = 'First 14 done (Highest + High Top)';
+        milestone14.appendChild(milestone14Label);
+        timeline.appendChild(milestone14);
       }
 
       if (first25.length > 0) {
@@ -1584,7 +1603,7 @@
 
         const milestoneLabel = document.createElement('div');
         milestoneLabel.className = 'milestone-label';
-        milestoneLabel.textContent = 'First 25 build done';
+        milestoneLabel.textContent = 'First 25 done (Highest + High)';
         milestone.appendChild(milestoneLabel);
         timeline.appendChild(milestone);
       }
@@ -2017,7 +2036,7 @@
 
         ctx.fillStyle = '#d62828';
         ctx.font = '12px Segoe UI';
-        ctx.fillText('First 25 build done', mx + 4, pad.top + 12);
+        ctx.fillText('First 25 done (Highest + High)', mx + 4, pad.top + 12);
       }
 
       if (hoverIndex >= 0 && hoverIndex < count) {
@@ -2146,7 +2165,18 @@
             cell.textContent = `${d.getMonth() + 1}/${d.getDate()}-${endDate.getMonth() + 1}/${endDate.getDate()}`;
           } else {
             const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
-            cell.textContent = `${d.getMonth() + 1}/${d.getDate()} ${wd}`;
+            cell.classList.add('two-line-label');
+
+            const dateLine = document.createElement('span');
+            dateLine.className = 'day-primary';
+            dateLine.textContent = `${d.getMonth() + 1}/${d.getDate()}`;
+
+            const dayLine = document.createElement('span');
+            dayLine.className = 'day-secondary';
+            dayLine.textContent = wd;
+
+            cell.appendChild(dateLine);
+            cell.appendChild(dayLine);
           }
         }
         row.appendChild(cell);
