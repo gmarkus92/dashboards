@@ -783,6 +783,9 @@
     }
 
     function getDefaultMetricsForIndex(index) {
+      if (index === 25) return 264;
+      if (index === 26) return 77;
+      if (index === 27) return 18;
       const v = Number(DEFAULT_METRICS[index]);
       return Number.isFinite(v) && v >= 0 ? v : 0;
     }
