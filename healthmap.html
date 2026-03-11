@@ -12,6 +12,8 @@
       --text: #17212b;
       --muted: #5f6c7b;
       --ready: #16a34a;
+      --in-progress: #2563eb;
+      --blocked: #dc2626;
       --not-ready: #c7cfd9;
     }
 
@@ -37,6 +39,28 @@
       gap: 8px;
     }
 
+    .legend {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      font-size: 12px;
+      color: #334155;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+
     .cell {
       border-radius: 8px;
       height: 54px;
@@ -57,9 +81,19 @@
       color: #fff;
     }
 
+    .cell.in-progress {
+      background: var(--in-progress);
+      color: #fff;
+    }
+
     .cell.not-ready {
       background: var(--not-ready);
       color: #334155;
+    }
+
+    .cell.blocked {
+      background: var(--blocked);
+      color: #fff;
     }
 
     .cell:hover {
@@ -98,6 +132,12 @@
 <body>
   <div class="wrap">
     <div class="grid" id="grid"></div>
+    <div class="legend" aria-label="Status legend">
+      <span class="legend-item"><span class="legend-swatch" style="background: var(--ready);"></span>Done</span>
+      <span class="legend-item"><span class="legend-swatch" style="background: var(--in-progress);"></span>In progress</span>
+      <span class="legend-item"><span class="legend-swatch" style="background: var(--blocked);"></span>Blocked</span>
+      <span class="legend-item"><span class="legend-swatch" style="background: var(--not-ready);"></span>To Do</span>
+    </div>
   </div>
 
   <script>
@@ -142,13 +182,30 @@
 
     // Based on current roadmap completion map (A/E/B all done).
     const READY_IDS = new Set(["fixed-2", "fixed-11", "fixed-12", "fixed-14", "fixed-24"]);
+    const IN_PROGRESS_IDS = new Set([
+      "fixed-1",
+      "fixed-3",
+      "fixed-4",
+      "fixed-6",
+      "fixed-7",
+      "fixed-8",
+      "fixed-9",
+      "fixed-10",
+      "fixed-15",
+      "fixed-16",
+      "fixed-17",
+      "fixed-22"
+    ]);
+    const BLOCKED_IDS = new Set(["fixed-36"]);
 
     const grid = document.getElementById("grid");
     ITEMS.forEach((item, index) => {
-      const ready = READY_IDS.has(item.id);
+      const blocked = BLOCKED_IDS.has(item.id);
+      const ready = !blocked && READY_IDS.has(item.id);
+      const inProgress = !blocked && !ready && IN_PROGRESS_IDS.has(item.id);
       const cell = document.createElement("div");
-      cell.className = `cell ${ready ? "ready" : "not-ready"}`;
-      cell.title = `${index + 1}. ${item.name} - ${ready ? "Ready" : "Not ready"}`;
+      cell.className = `cell ${blocked ? "blocked" : ready ? "ready" : inProgress ? "in-progress" : "not-ready"}`;
+      cell.title = `${index + 1}. ${item.name} - ${blocked ? "Blocked" : ready ? "Done" : inProgress ? "In progress" : "To Do"}`;
 
       const idxEl = document.createElement("div");
       idxEl.className = "cell-index";
