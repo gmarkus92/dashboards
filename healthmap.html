@@ -38,7 +38,6 @@
     }
 
     .cell {
-      border: 1px solid var(--border);
       border-radius: 8px;
       height: 54px;
       display: flex;
@@ -50,17 +49,23 @@
       cursor: default;
       user-select: none;
       overflow: hidden;
+      transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
     }
 
     .cell.ready {
       background: var(--ready);
       color: #fff;
-      border-color: #15803d;
     }
 
     .cell.not-ready {
       background: var(--not-ready);
       color: #334155;
+    }
+
+    .cell:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(23, 33, 43, 0.14);
+      filter: brightness(1.03);
     }
 
     .cell-index {
