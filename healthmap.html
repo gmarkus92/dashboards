@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Healthmap</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --border: #d7dde4;
+      --text: #17212b;
+      --muted: #5f6c7b;
+      --ready: #16a34a;
+      --not-ready: #c7cfd9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: 12px auto;
+      padding: 0 10px 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(72px, 1fr));
+      gap: 8px;
+    }
+
+    .cell {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      height: 54px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: flex-start;
+      gap: 4px;
+      padding: 6px;
+      cursor: default;
+      user-select: none;
+      overflow: hidden;
+    }
+
+    .cell.ready {
+      background: var(--ready);
+      color: #fff;
+      border-color: #15803d;
+    }
+
+    .cell.not-ready {
+      background: var(--not-ready);
+      color: #334155;
+    }
+
+    .cell-index {
+      font-weight: 700;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .cell-name {
+      font-size: 10px;
+      line-height: 1.2;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    @media (max-width: 760px) {
+      .grid {
+        grid-template-columns: repeat(5, minmax(58px, 1fr));
+      }
+
+      .cell {
+        height: 46px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <script>
+    const ITEMS = [
+      { id: "fixed-1", name: "Login & Registration Journey Performance Dashboards" },
+      { id: "fixed-2", name: "Interactive Landing Page" },
+      { id: "fixed-3", name: "Health & Check Performance Dashboard" },
+      { id: "fixed-4", name: "OneApp Push vs Pull (Login + SCA Counts)" },
+      { id: "fixed-5", name: "BBA-specific technical dashboards" },
+      { id: "fixed-6", name: "Crash Dashboard" },
+      { id: "fixed-7", name: "Business KPI" },
+      { id: "fixed-8", name: "Error dashboard for the HIDSDK errors (MRUM)" },
+      { id: "fixed-9", name: "Other Business Transactions Dashboards" },
+      { id: "fixed-10", name: "BBA Single Pane of Glass" },
+      { id: "fixed-11", name: "Top 4 Journeys Dashboards - Registration" },
+      { id: "fixed-12", name: "Top 4 Journeys Dashboards - Login" },
+      { id: "fixed-13", name: "Top 5 Business Journeys - Transactions" },
+      { id: "fixed-14", name: "Top 4 Journeys Dashboards - Payments" },
+      { id: "fixed-15", name: "Digital Money Manager - High Level Overview" },
+      { id: "fixed-16", name: "Cards/SCA Single Pane of Glass" },
+      { id: "fixed-17", name: "OneApp Push vs Pull Service" },
+      { id: "fixed-18", name: "Aurora DB Monitoring Dashboard" },
+      { id: "fixed-19", name: "Networking Monitoring Dashboard" },
+      { id: "fixed-20", name: "Ingress Layer Monitoring Dashboard" },
+      { id: "fixed-21", name: "Load Balancers Monitoring Dashboard" },
+      { id: "fixed-22", name: "PSD2PROD SinglePaneofGlass" },
+      { id: "fixed-23", name: "BBA ART & Infrastructure Performance Monitoring" },
+      { id: "fixed-24", name: "Elastic Cache Redis Monitoring" },
+      { id: "fixed-25", name: "Overall DSO Performance" },
+      { id: "fixed-26", name: "App Performance - Low Level" },
+      { id: "fixed-27", name: "Digital Money Manager - Top Transactions" },
+      { id: "fixed-28", name: "AppD Null Issue Validation" },
+      { id: "fixed-29", name: "Load Distribution Dashboard" },
+      { id: "fixed-30", name: "Validation Failure and Success Analysis Dashboard for SCA" },
+      { id: "fixed-31", name: "Cards Control - No Cards Screen" },
+      { id: "fixed-32", name: "Device Registration against Location" },
+      { id: "fixed-33", name: "AppDSDK - User Distribution stats by Country" },
+      { id: "fixed-34", name: "Biometrics BTs and Service Endpoint" },
+      { id: "fixed-35", name: "Application Performance - Low Level" },
+      { id: "fixed-36", name: "Top 4 Journeys Dashboards - Statements" }
+    ];
+
+    // Based on current roadmap completion map (A/E/B all done).
+    const READY_IDS = new Set(["fixed-2", "fixed-11", "fixed-12", "fixed-14", "fixed-24"]);
+
+    const grid = document.getElementById("grid");
+    ITEMS.forEach((item, index) => {
+      const ready = READY_IDS.has(item.id);
+      const cell = document.createElement("div");
+      cell.className = `cell ${ready ? "ready" : "not-ready"}`;
+      cell.title = `${index + 1}. ${item.name} - ${ready ? "Ready" : "Not ready"}`;
+
+      const idxEl = document.createElement("div");
+      idxEl.className = "cell-index";
+      idxEl.textContent = String(index + 1);
+
+      const nameEl = document.createElement("div");
+      nameEl.className = "cell-name";
+      nameEl.textContent = item.name;
+
+      cell.appendChild(idxEl);
+      cell.appendChild(nameEl);
+      grid.appendChild(cell);
+    });
+  </script>
+</body>
+</html>
